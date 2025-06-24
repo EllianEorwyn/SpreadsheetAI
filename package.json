@@ -1,0 +1,13 @@
+{
+  "name": "spreadsheetai",
+  "version": "1.0.0",
+  "description": "An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, define custom analyses, and batch-process each row through an LLM—all in your browser, with live token-count and cost estimates.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
