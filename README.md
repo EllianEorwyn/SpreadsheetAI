@@ -47,7 +47,32 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
 6. **Progress & Output**  
    - **Progress Bar**  
    - **Status Toasts** (errors, warnings)  
-   - **Download Processed Spreadsheet** button  
-   - **View Audit Log** (JSON/CSV)  
+   - **Download Processed Spreadsheet** button
+   - **View Audit Log** (JSON/CSV)
 
 ---
+
+## 💻 Running Locally
+
+1. Clone or download this repository.
+2. Open `index.html` in your preferred browser to launch the app offline. No server is required.
+
+### Optional npm tooling
+
+If network access is available, install optional development tools:
+
+```bash
+npm install
+```
+
+This installs potential linters, bundlers, or other dev utilities.
+
+## 🤝 Contributing
+
+We welcome issues and pull requests.
+
+1. Fork the project and create a feature branch.
+2. Make your changes with clear commit messages.
+3. Open a PR referencing any related issues.
+4. After review, your contribution can be merged.
+
