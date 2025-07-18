@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzeTaskTemplate: document.getElementById('analyze-task-template'),
         compareTaskTemplate: document.getElementById('compare-task-template'),
         customTaskTemplate: document.getElementById('custom-task-template'),
+        autoTaskTemplate: document.getElementById("auto-task-template"),
         costEstimate: document.getElementById('cost-estimate'),
         tokenEstimate: document.getElementById('token-estimate'),
         dryRunBtn: document.getElementById('dry-run-btn'),
@@ -288,6 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (type === 'custom') {
             newTask = taskData || { id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
             template = ui.customTaskTemplate;
+        } else if (type === "auto") {
+            newTask = taskData || { id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
+            template = ui.autoTaskTemplate;
         } else return;
         
         if (!taskData) {
@@ -408,6 +412,22 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCostEstimate();
     }
     
+    async function autoGenerateTask() {
+        if (appState.data.length === 0) { log('Upload a file before using Auto-Generate.', 'ERROR'); return; }
+        if (!confirm('This will use API resources to auto-generate a single bulk analysis task. Continue?')) return;
+        log('Generating auto task...', 'API');
+        const headers = appState.headers;
+        const sampleRows = appState.data.slice(0,5);
+        const preview = [headers.join(' | ')].concat(sampleRows.map(r => headers.map(h => r[h]).join(' | '))).join('\n');
+        const userPrompt = `Spreadsheet Preview:\n${preview}\n\nDescribe this spreadsheet in a couple sentences. Mention which columns have data and which are empty. Suggest analysis instructions to fill the empty columns based on existing data.`;
+        try {
+            const result = await processWithApi(userPrompt, 200);
+            addAnalysisTask('auto', { prompt: result.text.trim() });
+            log('Auto-generated task added.', 'SUCCESS');
+        } catch (error) {
+            log(`Failed to auto-generate task: ${error.message}`, 'ERROR');
+        }
+    }
     function startTestMode(task) {
         ui.selectTaskModal.classList.add('hidden');
         appState.testMode = { isActive: true, task, currentIndex: 0 };
@@ -629,11 +649,11 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const taskType = e.target.dataset.taskType;
         if (taskType) {
-            addAnalysisTask(taskType);
-            ui.addTaskMenu.classList.add('hidden');
+            ui.addTaskMenu.classList.add("hidden");
+            if (taskType === "auto") autoGenerateTask();
+            else addAnalysisTask(taskType);
         }
     });
-
     ui.taskContainer.addEventListener('click', (e) => {
         const taskCard = e.target.closest('.task-card');
         if (!taskCard) return;
@@ -717,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.testModeBtn.addEventListener('click', () => {
         if (appState.data.length === 0) { log('Load a file to enter Test Mode.', 'ERROR'); return; }
-        const validTasks = appState.analysisTasks.filter(t => t.outputColumn && ((t.type === 'analyze' && t.sourceColumn) || (t.type === 'compare' && t.sourceColumns.length > 0 && !t.sourceColumns.some(sc => !sc)) || t.type === 'custom'));
+        const validTasks = appState.analysisTasks.filter(t => t.outputColumn && ((t.type === 'analyze' && t.sourceColumn) || (t.type === 'compare' && t.sourceColumns.length > 0 && !t.sourceColumns.some(sc => !sc)) || t.type === 'custom' || t.type === 'auto'));
         if (validTasks.length === 0) { log('Please fully configure at least one analysis task.', 'ERROR'); return; }
         ui.testableTasksList.innerHTML = '';
         validTasks.forEach(task => {
