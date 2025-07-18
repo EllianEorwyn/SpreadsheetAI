@@ -65,7 +65,12 @@ document.addEventListener('DOMContentLoaded', () => {
         data: [],
         headers: [],
         isProcessing: false,
-        runLog: null,
+        runLog: {
+            startTime: new Date().toISOString(),
+            entries: [],
+            totalInputTokens: 0,
+            totalOutputTokens: 0
+        },
         analysisTasks: [],
         availableModels: { openai: [], ollama: [] },
         testMode: { isActive: false, task: null, currentIndex: 0 }
@@ -99,6 +104,14 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
+    };
+
+    const recordAuditEntry = (entry) => {
+        appState.runLog.entries.push(entry);
+        appState.runLog.totalInputTokens += entry.inputTokens || 0;
+        appState.runLog.totalOutputTokens += entry.outputTokens || 0;
+        ui.downloadLogBtn.disabled = false;
+        log(`Logged prompt (${entry.inputTokens} in, ${entry.outputTokens} out tokens).`, 'AUDIT');
     };
 
     const setProcessingState = (isProcessing) => {
@@ -252,7 +265,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
-        if (result.candidates?.[0]?.content.parts[0].text) return { text: result.candidates[0].content.parts[0].text };
+        if (result.candidates?.[0]?.content.parts[0].text) {
+            const text = result.candidates[0].content.parts[0].text;
+            recordAuditEntry({
+                timestamp: new Date().toISOString(),
+                provider: 'gemini',
+                model,
+                prompt: finalPrompt,
+                response: text,
+                inputTokens: estimateTokens(finalPrompt),
+                outputTokens: estimateTokens(text)
+            });
+            return { text };
+        }
         throw new Error("No content in Gemini response.");
     }
     async function processWithOpenAI(userPrompt, systemPrompt, maxTokens) {
@@ -276,7 +301,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
-        if (result.choices?.[0]?.message.content) return { text: result.choices[0].message.content };
+        if (result.choices?.[0]?.message.content) {
+            const text = result.choices[0].message.content;
+            const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`;
+            recordAuditEntry({
+                timestamp: new Date().toISOString(),
+                provider: 'openai',
+                model,
+                prompt: finalPrompt,
+                response: text,
+                inputTokens: estimateTokens(finalPrompt),
+                outputTokens: estimateTokens(text)
+            });
+            return { text };
+        }
         throw new Error("No content in OpenAI response.");
     }
     async function processWithOllama(userPrompt, systemPrompt, maxTokens) {
@@ -298,7 +336,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.error || `HTTP error! status: ${response.status}`);
-        if (result.response) return { text: result.response };
+        if (result.response) {
+            const text = result.response;
+            const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`;
+            recordAuditEntry({
+                timestamp: new Date().toISOString(),
+                provider: 'ollama',
+                model,
+                prompt: finalPrompt,
+                response: text,
+                inputTokens: estimateTokens(finalPrompt),
+                outputTokens: estimateTokens(text)
+            });
+            return { text };
+        }
         throw new Error("No content in Ollama response.");
     }
 
@@ -823,7 +874,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         setProcessingState(true);
-        appState.runLog = { /* setup log object */ };
         log(`Starting pipeline with ${appState.analysisTasks.length} tasks...`, 'RUN');
         
         let processedData = JSON.parse(JSON.stringify(appState.data));
@@ -855,7 +905,6 @@ document.addEventListener('DOMContentLoaded', () => {
         log('Pipeline finished successfully!', 'SUCCESS');
         setProcessingState(false);
         ui.downloadResultsBtn.style.display = 'inline-block';
-        ui.downloadLogBtn.style.display = 'inline-block';
     });
     
     ui.downloadResultsBtn.addEventListener('click', () => {
@@ -866,9 +915,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     ui.downloadLogBtn.addEventListener('click', () => {
-        if (!appState.runLog) return;
+        if (!appState.runLog || appState.runLog.entries.length === 0) return;
         const logContent = JSON.stringify(appState.runLog, null, 2);
-        const originalFilename = appState.file.name.replace(/\.[^/.]+$/, "");
+        const originalFilename = appState.file ? appState.file.name.replace(/\.[^/.]+$/, "") : 'log';
         downloadFile(logContent, `${originalFilename}_auditlog.json`, 'application/json');
     });
 
@@ -906,4 +955,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     addAnalysisTask('analyze');
     ui.providerSelector.dispatchEvent(new Event('change'));
+    ui.downloadLogBtn.style.display = 'inline-block';
+    ui.downloadLogBtn.disabled = appState.runLog.entries.length === 0;
 });
