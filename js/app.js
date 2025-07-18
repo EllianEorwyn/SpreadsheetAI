@@ -153,8 +153,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    function buildRowContext(row) {
+        const rowLines = appState.headers.map(h => `${h}: ${row[h] || ''}`);
+        let context = '### ROW CONTEXT - DO NOT INCLUDE IN OUTPUT ###\n' + rowLines.join('\n');
+        if (appState.data.length > 1 && appState.data[0] !== row) {
+            const refLines = appState.headers.map(h => `${h}: ${appState.data[0][h] || ''}`);
+            context += `\n\nReference Row:\n${refLines.join('\n')}`;
+        }
+        context += '\n### END CONTEXT ###';
+        return context;
+    }
+
     function buildPrompt(task, row) {
-        let prompt = task.prompt; 
+        let prompt = task.prompt;
 
         if (task.type === 'analyze') {
             prompt = prompt.replace(/\{\{COLUMN\}\}/g, row[task.sourceColumn] || '');
@@ -162,14 +173,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const columnsData = task.sourceColumns.map(sc => `Column '${sc}': ${row[sc] || ''}`).join('\n');
             prompt = prompt.replace(/\{\{COLUMNS_DATA\}\}/g, columnsData);
         }
-        
+
         appState.headers.forEach(header => {
             const escapedHeader = header.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regex = new RegExp(`\\{\\{${escapedHeader}\\}\\}`, 'g');
             prompt = prompt.replace(regex, row[header] || '');
         });
 
-        return prompt;
+        return `${buildRowContext(row)}\n\n${prompt}`;
     }
 
     const updateCostEstimate = () => {
