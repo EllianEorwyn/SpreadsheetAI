@@ -93,13 +93,31 @@
             </div>
 
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
-                <h2 class="font-bold mb-2 text-white">5. Project Description</h2>
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-white">5. Project Overview</h2>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button id="guess-project-btn" class="guess-btn text-sm bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-3 rounded-md">Guess</button>
+                    </div>
+                </div>
                 <textarea id="project-description-input" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Describe your research goals..."></textarea>
             </div>
 
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-white">6. Additional Context</h2>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button id="guess-additional-btn" class="guess-btn text-sm bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-3 rounded-md">Guess</button>
+                    </div>
+                </div>
+                <textarea id="additional-context-input" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Any extra details about this spreadsheet..."></textarea>
+            </div>
+
+
+            <div class="bg-gray-800 p-4 rounded-lg shadow-md">
                  <div class="flex justify-between items-center mb-2">
-                    <h2 class="font-bold text-white">6. Analysis Pipeline</h2>
+                    <h2 class="font-bold text-white">7. Analysis Pipeline</h2>
                     <div class="relative" id="add-task-dropdown-container">
                         <button id="add-task-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md flex items-center">
                             Add Task <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -118,7 +136,7 @@
             </div>
 
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
-                <h2 class="font-bold mb-2 text-white">7. Estimate & Run 🔹</h2>
+                <h2 class="font-bold mb-2 text-white">8. Estimate & Run 🔹</h2>
                 <div class="bg-gray-900 p-3 rounded-lg text-center">
                     <p class="text-sm text-gray-400">Estimated Cost</p>
                     <p id="cost-estimate" class="text-2xl font-mono text-green-400">$0.00</p>
@@ -177,8 +195,14 @@
                     <input type="text" data-type="outputColumn" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="e.g., summary">
                 </div>
             </div>
-             <div>
-                <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+            <div>
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
+                    </div>
+                </div>
                 <textarea data-type="prompt" rows="4" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Analyze the content of the selected column..."></textarea>
                 <p class="text-xs text-gray-500 mt-1">Variable `{{COLUMN}}` is replaced by the source column's value.<br>You can also reference any other column with `{{Column Name}}`.</p>
             </div>
@@ -213,7 +237,13 @@
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
+                    </div>
+                </div>
                 <textarea data-type="prompt" rows="4" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Analyze the relationship between the provided columns..."></textarea>
                 <p class="text-xs text-gray-500 mt-1">Variable `{{COLUMNS_DATA}}` is replaced by a block of the selected columns.<br>You can also reference any other column with `{{Column Name}}`.</p>
             </div>
@@ -239,7 +269,13 @@
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
+                    </div>
+                </div>
                 <textarea data-type="prompt" rows="4" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Perform a custom analysis for each row..."></textarea>
                 <p class="text-xs text-gray-500 mt-1">You can reference any column with `{{Column Name}}`.</p>
             </div>
@@ -265,7 +301,13 @@
                 </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                <div class="flex justify-between items-center">
+                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <div class="flex items-center">
+                        <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
+                        <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
+                    </div>
+                </div>
                 <textarea data-type="prompt" rows="4" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
                 <p class="text-xs text-gray-500 mt-1">Generated from spreadsheet preview. Edit as needed.</p>
             </div>

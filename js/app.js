@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ollamaModelSelector: document.getElementById('ollama-model-selector'),
         systemPromptInput: document.getElementById('system-prompt-input'),
         projectDescriptionInput: document.getElementById('project-description-input'),
+        additionalContextInput: document.getElementById('additional-context-input'),
+        guessProjectBtn: document.getElementById('guess-project-btn'),
+        guessAdditionalBtn: document.getElementById('guess-additional-btn'),
         addTaskDropdownContainer: document.getElementById('add-task-dropdown-container'),
         addTaskBtn: document.getElementById('add-task-btn'),
         addTaskMenu: document.getElementById('add-task-menu'),
@@ -200,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalInputTokens = 0;
         let totalOutputTokens = 0;
         const firstRow = appState.data[0];
-        const systemPromptTokens = estimateTokens(ui.systemPromptInput.value + ui.projectDescriptionInput.value);
+        const systemPromptTokens = estimateTokens(ui.systemPromptInput.value + ui.projectDescriptionInput.value + ui.additionalContextInput.value);
         
         appState.analysisTasks.forEach(task => {
             if (task.prompt && firstRow) {
@@ -238,7 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiKey = ui.geminiApiKeyInput.value;
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const projectDesc = ui.projectDescriptionInput.value;
-        const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\n---\n\n${userPrompt}`;
+        const additional = ui.additionalContextInput.value;
+        const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n---\n\n${userPrompt}`;
         const payload = {
             contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
             generationConfig: {
@@ -255,6 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const model = ui.openaiModelSelector.value;
         const apiKey = ui.openaiApiKeyInput.value;
         const projectDesc = ui.projectDescriptionInput.value;
+        const additional = ui.additionalContextInput.value;
         if (!apiKey) throw new Error("OpenAI API Key is required.");
         if (!model) throw new Error("Please fetch and select an OpenAI model.");
         const apiUrl = `https://api.openai.com/v1/chat/completions`;
@@ -263,6 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "system", content: `Project Description:\n${projectDesc}` },
+                { role: "system", content: `Additional Context:\n${additional}` },
                 { role: "user", content: userPrompt }
             ],
             max_tokens: parseInt(maxTokens, 10) || 150,
@@ -279,9 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!model) throw new Error("Please fetch and select an Ollama model.");
         const apiUrl = new URL('/api/generate', url).href;
         const projectDesc = ui.projectDescriptionInput.value;
+        const additional = ui.additionalContextInput.value;
         const payload = {
             model: model,
-            prompt: `Project Description:\n${projectDesc}\n\n${userPrompt}`,
+            prompt: `Project Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`,
             system: systemPrompt,
             stream: false,
             options: {
@@ -442,7 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const sampleRows = appState.data.slice(0,5);
         const preview = [headers.join(' | ')].concat(sampleRows.map(r => headers.map(h => r[h]).join(' | '))).join('\n');
         const projectDesc = ui.projectDescriptionInput.value || 'N/A';
-        const userPrompt = `Project Description: ${projectDesc}\nSpreadsheet Preview:\n${preview}\n\nExisting columns with data: ${dataCols.join(', ')}.\nColumns needing analysis: ${emptyCols.join(', ')}.\n\nFor each column needing analysis, provide one line in the form "Column -> instruction" describing how to analyze each row.`;
+        const additional = ui.additionalContextInput.value || '';
+        const guidance = `You are configuring analysis tasks. For each task field:\n- Use {{ColumnName}} to reference the current row's data for a given column.\n- Specify exactly which column to write results into.\n- Output only the analysis text—no greetings or extra commentary, don't duplicate data from other fields.`;
+        const userPrompt = `${guidance}\n\nProject Description: ${projectDesc}\nAdditional Context:\n${additional}\nSpreadsheet Preview:\n${preview}\n\nExisting columns with data: ${dataCols.join(', ')}.\nColumns needing analysis: ${emptyCols.join(', ')}.\n\nFor each column needing analysis, provide one line in the form "Column -> instruction" describing how to analyze each row.`;
 
         try {
             const result = await processWithApi(userPrompt, 400);
@@ -463,6 +472,91 @@ document.addEventListener('DOMContentLoaded', () => {
             else log('Auto generation produced no usable tasks.', 'ERROR');
         } catch (error) {
             log(`Failed to auto-generate tasks: ${error.message}`, 'ERROR');
+        }
+    }
+
+    function gatherGuessContext() {
+        const headers = appState.headers;
+        const sampleRows = appState.data.slice(0,3);
+        const preview = headers.length ? [headers.join(' | ')].concat(sampleRows.map(r => headers.map(h => r[h]).join(' | '))).join('\n') : '';
+        const tasks = appState.analysisTasks.map(t => `${t.outputColumn}: ${t.prompt}`).join('\n');
+        return {
+            system: ui.systemPromptInput.value,
+            project: ui.projectDescriptionInput.value,
+            additional: ui.additionalContextInput.value,
+            preview,
+            tasks
+        };
+    }
+
+    function toggleGuessLoading(btn, loading) {
+        if (loading) {
+            btn.disabled = true;
+            btn.dataset.label = btn.textContent;
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25"/><path stroke-linecap="round" stroke-width="4" d="M4 12a8 8 0 018-8" class="opacity-75"/></svg>';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = btn.dataset.label || 'Guess';
+        }
+    }
+
+    async function guessProjectOverview() {
+        const btn = ui.guessProjectBtn;
+        const errorEl = btn.parentElement.querySelector('.guess-error');
+        errorEl.classList.add('hidden');
+        toggleGuessLoading(btn, true);
+        const ctx = gatherGuessContext();
+        const prompt = `${ctx.system}\n\nSpreadsheet Preview:\n${ctx.preview}\n\nExisting Tasks:\n${ctx.tasks}\n\nProvide a short project overview describing what this spreadsheet is about.`;
+        try {
+            const res = await processWithApi(prompt, 150);
+            ui.projectDescriptionInput.value = res.text.trim();
+            updateCostEstimate();
+        } catch (err) {
+            errorEl.classList.remove('hidden');
+        } finally {
+            toggleGuessLoading(btn, false);
+        }
+    }
+
+    async function guessAdditionalContext() {
+        const btn = ui.guessAdditionalBtn;
+        const errorEl = btn.parentElement.querySelector('.guess-error');
+        errorEl.classList.add('hidden');
+        toggleGuessLoading(btn, true);
+        const ctx = gatherGuessContext();
+        const prompt = `${ctx.system}\n\nProject Overview:\n${ctx.project}\nSpreadsheet Preview:\n${ctx.preview}\nExisting Tasks:\n${ctx.tasks}\n\nSuggest brief additional context to improve the analysis.`;
+        try {
+            const res = await processWithApi(prompt, 150);
+            ui.additionalContextInput.value = res.text.trim();
+            updateCostEstimate();
+        } catch (err) {
+            errorEl.classList.remove('hidden');
+        } finally {
+            toggleGuessLoading(btn, false);
+        }
+    }
+
+    async function guessTaskPrompt(taskCard, btn) {
+        const errorEl = btn.parentElement.querySelector('.guess-error');
+        errorEl.classList.add('hidden');
+        toggleGuessLoading(btn, true);
+        const taskId = taskCard.dataset.taskId;
+        const task = appState.analysisTasks.find(t => t.id === taskId);
+        const ctx = gatherGuessContext();
+        const base = 'You are configuring analysis tasks. For each task field:\n- Use {{ColumnName}} to reference the current row\'s data for a given column.\n- Specify exactly which column to write results into.\n- Output only the analysis text—no greetings or extra commentary, don\'t duplicate data from other fields.';
+        let desc = '';
+        if (task.type === 'analyze') desc = `Analyze column ${task.sourceColumn} and save to ${task.outputColumn}.`;
+        else if (task.type === 'compare') desc = `Compare columns ${task.sourceColumns.join(', ')} and save to ${task.outputColumn}.`;
+        else desc = `Write results to column ${task.outputColumn}.`;
+        const prompt = `${base}\n\nProject Overview:\n${ctx.project}\nAdditional Context:\n${ctx.additional}\nSpreadsheet Preview:\n${ctx.preview}\nExisting Tasks:\n${ctx.tasks}\n\n${desc}\nProvide only the instructions.`;
+        try {
+            const res = await processWithApi(prompt, 200);
+            taskCard.querySelector('textarea[data-type="prompt"]').value = res.text.trim();
+            updateTaskState(taskId, 'prompt', res.text.trim());
+        } catch (err) {
+            errorEl.classList.remove('hidden');
+        } finally {
+            toggleGuessLoading(btn, false);
         }
     }
     function startTestMode(task) {
@@ -520,6 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modelConfig: {},
             systemPrompt: ui.systemPromptInput.value,
             projectDescription: ui.projectDescriptionInput.value,
+            additionalContext: ui.additionalContextInput.value,
             analysisTasks: appState.analysisTasks,
         };
 
@@ -562,6 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 ui.systemPromptInput.value = profile.systemPrompt || DEFAULT_SYSTEM_PROMPT;
                 ui.projectDescriptionInput.value = profile.projectDescription || '';
+                ui.additionalContextInput.value = profile.additionalContext || '';
 
                 const { modelConfig } = profile;
                 if (modelConfig) {
@@ -630,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCostEstimate();
     });
     
-    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.systemPromptInput, ui.projectDescriptionInput].forEach(el => el.addEventListener('input', updateCostEstimate));
+    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.systemPromptInput, ui.projectDescriptionInput, ui.additionalContextInput].forEach(el => el.addEventListener('input', updateCostEstimate));
     
     ui.fetchOpenAIModelsBtn.addEventListener('click', async () => {
         const apiKey = ui.openaiApiKeyInput.value;
@@ -796,6 +892,14 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.testModeRerunBtn.addEventListener('click', runTestModeRow);
     ui.testModeNextBtn.addEventListener('click', () => { if (appState.testMode.currentIndex < appState.data.length - 1) { appState.testMode.currentIndex++; renderTestModeView(); } });
     ui.testModePrevBtn.addEventListener('click', () => { if (appState.testMode.currentIndex > 0) { appState.testMode.currentIndex--; renderTestModeView(); } });
+    ui.guessProjectBtn.addEventListener('click', guessProjectOverview);
+    ui.guessAdditionalBtn.addEventListener('click', guessAdditionalContext);
+    ui.taskContainer.addEventListener('click', (e) => {
+        if(e.target.classList.contains('guess-task-btn')) {
+            const card = e.target.closest('.task-card');
+            if(card) guessTaskPrompt(card, e.target);
+        }
+    });
     ui.saveProfileBtn.addEventListener('click', saveProfile);
     ui.loadProfileInput.addEventListener('change', loadProfile);
 
