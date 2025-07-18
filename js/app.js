@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
         compareTaskTemplate: document.getElementById('compare-task-template'),
         customTaskTemplate: document.getElementById('custom-task-template'),
         costEstimate: document.getElementById('cost-estimate'),
+        bulkTaskTemplate: document.getElementById("bulk-task-template"),
+        autoTaskModal: document.getElementById("auto-generate-modal"),
+        confirmAutoTaskBtn: document.getElementById("confirm-auto-task-btn"),
+        cancelAutoTaskBtn: document.getElementById("cancel-auto-task-btn"),
         tokenEstimate: document.getElementById('token-estimate'),
         dryRunBtn: document.getElementById('dry-run-btn'),
         runBtn: document.getElementById('run-btn'),
@@ -320,12 +324,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function removeAnalysisTask(taskId) {
+        validateTasks();
         appState.analysisTasks = appState.analysisTasks.filter(task => task.id !== taskId);
         ui.taskContainer.querySelector(`.task-card[data-task-id="${taskId}"]`)?.remove();
         log('Removed analysis task.', 'INFO');
         updateCostEstimate();
     }
 
+        validateTasks();
     function addColumnToCompareTask(taskCard, value = '') {
         const taskId = taskCard.dataset.taskId;
         const task = appState.analysisTasks.find(t => t.id === taskId);
@@ -375,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateCostEstimate();
     }
+        validateTasks();
 
     function updateTaskColumnDropdowns() {
         document.querySelectorAll('.task-input[data-type="sourceColumn"]').forEach(dropdown => {
@@ -406,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (provider === 'ollama' && models.some(m => m.name.includes('llama3'))) selector.value = models.find(m => m.name.includes('llama3')).name;
         selector.disabled = false;
         updateCostEstimate();
+        validateTasks();
     }
     
     function startTestMode(task) {
@@ -542,6 +550,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
+async function generateBulkTask() {
+    ui.autoTaskModal.classList.add('hidden');
+    if (appState.headers.length === 0) { log('Upload a file first.', 'ERROR'); return; }
+    setProcessingState(true);
+    try {
+        const headers = appState.headers;
+        const rows = appState.data.slice(0, 5);
+        let snippet = headers.join(',') + '\n';
+        rows.forEach(r => { snippet += headers.map(h => r[h] || '').join(',') + '\n'; });
+        const userPrompt = `Spreadsheet snippet:\n${snippet}\n\nProvide concise analysis instructions summarizing the sheet. Begin with an overview line like: "This spreadsheet consists of a header row with ${headers.length} columns, they are |${headers.join('|')}|." Also note which columns have data and which are empty, then suggest analysis for populated columns.`;
+        const systemPrompt = 'You generate short task instructions for analyzing spreadsheets.';
+        const result = await processWithApi(userPrompt, 200);
+        const instructions = result.text.trim();
+        addAnalysisTask('bulk', { id: crypto.randomUUID(), type: 'bulk', outputColumn: `bulk_analysis_${appState.analysisTasks.length + 1}`, prompt: instructions, maxTokens: 150 });
+        log('Auto-generated task added.', 'INFO');
+    } catch (error) {
+        log(`Failed to auto-generate task: ${error.message}`, 'ERROR');
+    } finally {
+        setProcessingState(false);
+    }
+}
     ui.fileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -657,13 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.runBtn.addEventListener('click', async () => {
         if (appState.isProcessing || appState.data.length === 0) { log('Cannot start run. No data loaded.', 'ERROR'); return; }
         if (appState.analysisTasks.length === 0) { log('Cannot start run. Please add at least one analysis task.', 'ERROR'); return; }
-        for (const task of appState.analysisTasks) {
-            if (!task.outputColumn || !task.prompt || 
-               (task.type === 'analyze' && !task.sourceColumn) || 
-               (task.type === 'compare' && task.sourceColumns.some(sc => !sc))) {
-                log(`Task is incomplete. Please fill all fields for each task before running.`, 'ERROR'); return;
-            }
-        }
+        if (!validateTasks()) return;
         
         setProcessingState(true);
         appState.runLog = { /* setup log object */ };
@@ -734,11 +757,14 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.closeTestModeBtn.addEventListener('click', () => ui.testModeModal.classList.add('hidden'));
     ui.testModeRerunBtn.addEventListener('click', runTestModeRow);
     ui.testModeNextBtn.addEventListener('click', () => { if (appState.testMode.currentIndex < appState.data.length - 1) { appState.testMode.currentIndex++; renderTestModeView(); } });
+    ui.cancelAutoTaskBtn.addEventListener("click", () => ui.autoTaskModal.classList.add("hidden"));
+    ui.confirmAutoTaskBtn.addEventListener("click", generateBulkTask);
     ui.testModePrevBtn.addEventListener('click', () => { if (appState.testMode.currentIndex > 0) { appState.testMode.currentIndex--; renderTestModeView(); } });
     ui.saveProfileBtn.addEventListener('click', saveProfile);
     ui.loadProfileInput.addEventListener('change', loadProfile);
 
     // --- Initial Load ---
     addAnalysisTask('analyze');
+    validateTasks();
     ui.providerSelector.dispatchEvent(new Event('change'));
 });

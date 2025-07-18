@@ -27,7 +27,7 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
 
 2. **Analysis Pipeline**  
    - **Panel:** **Analysis Pipeline** (collapsible)  
-   - **Action:** **Add Task** dropdown → “Analyze Column” / “Compare Columns”  
+   - **Action:** **Add Task** dropdown → “Analyze Column” / “Compare Columns” / “Auto-Generate Task”  
    - **Task Card:** choose source column(s), name output column, enter instructions, set max tokens  
 
 3. **Global Settings**  
