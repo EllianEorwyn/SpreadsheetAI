@@ -275,28 +275,26 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error("No content in Ollama response.");
     }
 
-    function addAnalysisTask(type, taskData = null) {
-        const taskId = taskData ? taskData.id : crypto.randomUUID();
-        let newTask, template;
+    function addAnalysisTask(type, taskData = {}) {
         const taskIndex = appState.analysisTasks.length;
+        const taskId = taskData.id || crypto.randomUUID();
+        let newTask, template;
 
         if (type === 'analyze') {
-            newTask = taskData || { id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
+            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
             template = ui.analyzeTaskTemplate;
         } else if (type === 'compare') {
-            newTask = taskData || { id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
+            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
             template = ui.compareTaskTemplate;
         } else if (type === 'custom') {
-            newTask = taskData || { id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
+            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
             template = ui.customTaskTemplate;
         } else if (type === "auto") {
-            newTask = taskData || { id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150 };
+            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
             template = ui.autoTaskTemplate;
         } else return;
-        
-        if (!taskData) {
-            appState.analysisTasks.push(newTask);
-        }
+
+        appState.analysisTasks.push(newTask);
 
         const taskFragment = template.content.cloneNode(true);
         const taskCard = taskFragment.querySelector('.task-card');
