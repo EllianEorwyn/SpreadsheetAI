@@ -102,6 +102,7 @@
                                 <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="analyze">Analyze Single Column</a>
                                 <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="compare">Compare Columns</a>
                                 <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="custom">Custom Analysis</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="auto">Auto-Generate Task</a>
                             </div>
                         </div>
                     </div>
@@ -239,6 +240,31 @@
     </div>
 </template>
 
+<template id="auto-task-template">
+    <div class="task-card bg-gray-900 p-3 rounded-lg border border-gray-700">
+        <div class="flex justify-between items-center mb-2">
+            <h3 class="font-semibold text-white">Task: Auto Generated Analysis</h3>
+            <button class="remove-task-btn text-gray-500 hover:text-red-400 text-xl leading-none">&times;</button>
+        </div>
+        <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400">1. Save Result To</label>
+                    <input type="text" data-type="outputColumn" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="e.g., auto_analysis">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400">2. Max Output Tokens</label>
+                    <input type="number" data-type="maxTokens" value="150" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                <textarea data-type="prompt" rows="4" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Generated from spreadsheet preview. Edit as needed.</p>
+            </div>
+        </div>
+    </div>
+</template>
 <!-- Modals for Test Mode, etc. -->
 <div id="select-task-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
     <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
