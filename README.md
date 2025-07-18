@@ -50,6 +50,15 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
    - **Download Processed Spreadsheet** button
    - **View Audit Log** (JSON/CSV)
 
+### Prompt Variables
+
+Task instructions can reference spreadsheet data using placeholder syntax:
+
+- `{{COLUMN}}` – replaced with the value from the selected source column (for Analyze tasks).
+- `{{Column Name}}` – replaced with the value from any column in the current row.
+
+Each prompt is also prepended with a hidden "row context" block containing all column values so the model has the full row data without repeating it in the output.
+
 ---
 
 ## 💻 Running Locally

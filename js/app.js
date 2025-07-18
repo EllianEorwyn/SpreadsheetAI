@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         geminiConfig: document.getElementById('gemini-config'),
         openaiConfig: document.getElementById('openai-config'),
         ollamaConfig: document.getElementById('ollama-config'),
+        geminiApiKeyInput: document.getElementById('gemini-api-key-input'),
         geminiModelSelector: document.getElementById('gemini-model-selector'),
         openaiApiKeyInput: document.getElementById('openai-api-key-input'),
         fetchOpenAIModelsBtn: document.getElementById('fetch-openai-models-btn'),
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchOllamaModelsBtn: document.getElementById('fetch-ollama-models-btn'),
         ollamaModelSelector: document.getElementById('ollama-model-selector'),
         systemPromptInput: document.getElementById('system-prompt-input'),
+        projectDescriptionInput: document.getElementById('project-description-input'),
         addTaskDropdownContainer: document.getElementById('add-task-dropdown-container'),
         addTaskBtn: document.getElementById('add-task-btn'),
         addTaskMenu: document.getElementById('add-task-menu'),
@@ -151,8 +153,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    function buildRowContext(row) {
+        const rowLines = appState.headers.map(h => `${h}: ${row[h] || ''}`);
+        let context = '### ROW CONTEXT - DO NOT INCLUDE IN OUTPUT ###\n' + rowLines.join('\n');
+        if (appState.data.length > 1 && appState.data[0] !== row) {
+            const refLines = appState.headers.map(h => `${h}: ${appState.data[0][h] || ''}`);
+            context += `\n\nReference Row:\n${refLines.join('\n')}`;
+        }
+        context += '\n### END CONTEXT ###';
+        return context;
+    }
+
     function buildPrompt(task, row) {
-        let prompt = task.prompt; 
+        let prompt = task.prompt;
 
         if (task.type === 'analyze') {
             prompt = prompt.replace(/\{\{COLUMN\}\}/g, row[task.sourceColumn] || '');
@@ -160,14 +173,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const columnsData = task.sourceColumns.map(sc => `Column '${sc}': ${row[sc] || ''}`).join('\n');
             prompt = prompt.replace(/\{\{COLUMNS_DATA\}\}/g, columnsData);
         }
-        
+
         appState.headers.forEach(header => {
             const escapedHeader = header.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regex = new RegExp(`\\{\\{${escapedHeader}\\}\\}`, 'g');
             prompt = prompt.replace(regex, row[header] || '');
         });
 
-        return prompt;
+        return `${buildRowContext(row)}\n\n${prompt}`;
     }
 
     const updateCostEstimate = () => {
@@ -187,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalInputTokens = 0;
         let totalOutputTokens = 0;
         const firstRow = appState.data[0];
-        const systemPromptTokens = estimateTokens(ui.systemPromptInput.value);
+        const systemPromptTokens = estimateTokens(ui.systemPromptInput.value + ui.projectDescriptionInput.value);
         
         appState.analysisTasks.forEach(task => {
             if (task.prompt && firstRow) {
@@ -222,10 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     async function processWithGemini(userPrompt, systemPrompt, maxTokens) {
         const model = ui.geminiModelSelector.value;
-        const apiKey = "";
+        const apiKey = ui.geminiApiKeyInput.value;
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const finalPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
-        const payload = { 
+        const projectDesc = ui.projectDescriptionInput.value;
+        const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\n---\n\n${userPrompt}`;
+        const payload = {
             contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
             generationConfig: {
                 maxOutputTokens: parseInt(maxTokens, 10) || 150,
@@ -240,12 +254,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processWithOpenAI(userPrompt, systemPrompt, maxTokens) {
         const model = ui.openaiModelSelector.value;
         const apiKey = ui.openaiApiKeyInput.value;
+        const projectDesc = ui.projectDescriptionInput.value;
         if (!apiKey) throw new Error("OpenAI API Key is required.");
         if (!model) throw new Error("Please fetch and select an OpenAI model.");
         const apiUrl = `https://api.openai.com/v1/chat/completions`;
-        const payload = { 
-            model: model, 
-            messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+        const payload = {
+            model: model,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "system", content: `Project Description:\n${projectDesc}` },
+                { role: "user", content: userPrompt }
+            ],
             max_tokens: parseInt(maxTokens, 10) || 150,
         };
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
@@ -259,10 +278,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = ui.ollamaUrlInput.value;
         if (!model) throw new Error("Please fetch and select an Ollama model.");
         const apiUrl = new URL('/api/generate', url).href;
-        const payload = { 
-            model: model, 
-            prompt: userPrompt, 
-            system: systemPrompt, 
+        const projectDesc = ui.projectDescriptionInput.value;
+        const payload = {
+            model: model,
+            prompt: `Project Description:\n${projectDesc}\n\n${userPrompt}`,
+            system: systemPrompt,
             stream: false,
             options: {
                 num_predict: parseInt(maxTokens, 10) || 150,
@@ -412,18 +432,37 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function autoGenerateTask() {
         if (appState.data.length === 0) { log('Upload a file before using Auto-Generate.', 'ERROR'); return; }
-        if (!confirm('This will use API resources to auto-generate a single bulk analysis task. Continue?')) return;
-        log('Generating auto task...', 'API');
+        if (!confirm('This will use API resources to auto-generate tasks for empty columns. Continue?')) return;
+        log('Generating auto tasks...', 'API');
+
         const headers = appState.headers;
+        const emptyCols = headers.filter(h => appState.data.every(r => !r[h]));
+        if (emptyCols.length === 0) { log('No empty columns detected.', 'ERROR'); return; }
+        const dataCols = headers.filter(h => !emptyCols.includes(h));
         const sampleRows = appState.data.slice(0,5);
         const preview = [headers.join(' | ')].concat(sampleRows.map(r => headers.map(h => r[h]).join(' | '))).join('\n');
-        const userPrompt = `Spreadsheet Preview:\n${preview}\n\nDescribe this spreadsheet in a couple sentences. Mention which columns have data and which are empty. Suggest analysis instructions to fill the empty columns based on existing data.`;
+        const projectDesc = ui.projectDescriptionInput.value || 'N/A';
+        const userPrompt = `Project Description: ${projectDesc}\nSpreadsheet Preview:\n${preview}\n\nExisting columns with data: ${dataCols.join(', ')}.\nColumns needing analysis: ${emptyCols.join(', ')}.\n\nFor each column needing analysis, provide one line in the form "Column -> instruction" describing how to analyze each row.`;
+
         try {
-            const result = await processWithApi(userPrompt, 200);
-            addAnalysisTask('auto', { prompt: result.text.trim() });
-            log('Auto-generated task added.', 'SUCCESS');
+            const result = await processWithApi(userPrompt, 400);
+            const lines = result.text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+            let added = 0;
+            lines.forEach(line => {
+                const parts = line.split('->');
+                if (parts.length >= 2) {
+                    const col = parts[0].trim();
+                    const instr = parts.slice(1).join('->').trim();
+                    if (emptyCols.includes(col)) {
+                        addAnalysisTask('custom', { outputColumn: col, prompt: instr });
+                        added++;
+                    }
+                }
+            });
+            if (added > 0) log(`Auto-generated ${added} task(s).`, 'SUCCESS');
+            else log('Auto generation produced no usable tasks.', 'ERROR');
         } catch (error) {
-            log(`Failed to auto-generate task: ${error.message}`, 'ERROR');
+            log(`Failed to auto-generate tasks: ${error.message}`, 'ERROR');
         }
     }
     function startTestMode(task) {
@@ -480,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             provider: ui.providerSelector.value,
             modelConfig: {},
             systemPrompt: ui.systemPromptInput.value,
+            projectDescription: ui.projectDescriptionInput.value,
             analysisTasks: appState.analysisTasks,
         };
 
@@ -495,6 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
              case 'gemini':
                 profile.modelConfig.model = ui.geminiModelSelector.value;
+                profile.modelConfig.apiKey = ui.geminiApiKeyInput.value;
                 break;
         }
         
@@ -520,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.providerSelector.dispatchEvent(new Event('change'));
 
                 ui.systemPromptInput.value = profile.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+                ui.projectDescriptionInput.value = profile.projectDescription || '';
 
                 const { modelConfig } = profile;
                 if (modelConfig) {
@@ -540,6 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                          case 'gemini':
                             ui.geminiModelSelector.value = modelConfig.model || 'gemini-1.5-flash-latest';
+                            ui.geminiApiKeyInput.value = modelConfig.apiKey || '';
                             break;
                     }
                 }
@@ -587,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCostEstimate();
     });
     
-    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.systemPromptInput].forEach(el => el.addEventListener('input', updateCostEstimate));
+    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.systemPromptInput, ui.projectDescriptionInput].forEach(el => el.addEventListener('input', updateCostEstimate));
     
     ui.fetchOpenAIModelsBtn.addEventListener('click', async () => {
         const apiKey = ui.openaiApiKeyInput.value;
