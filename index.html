@@ -48,12 +48,14 @@
                      <div>
                         <label for="provider-selector" class="block text-sm font-medium text-gray-400">Provider</label>
                         <select id="provider-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <option value="openai" selected>OpenAI</option>
                             <option value="gemini">Google Gemini</option>
-                            <option value="openai">OpenAI</option>
                             <option value="ollama">Ollama (Local)</option>
                         </select>
                      </div>
                      <div id="gemini-config" class="config-group space-y-2">
+                         <label for="gemini-api-key-input" class="block text-sm font-medium text-gray-400">API Key</label>
+                         <input type="password" id="gemini-api-key-input" placeholder="AIza..." class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                          <label for="gemini-model-selector" class="block text-sm font-medium text-gray-400">Model</label>
                          <select id="gemini-model-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                             <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest (Recommended)</option>
@@ -89,10 +91,15 @@
                 <h2 class="font-bold mb-2 text-white">4. System Prompt</h2>
                 <textarea id="system-prompt-input" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">You are an AI assistant whose sole task is to process spreadsheet rows exactly as the user’s analysis tasks specify. Output only the requested content in the exact format required—no greetings, acknowledgments, or extra commentary.</textarea>
             </div>
-            
+
+            <div class="bg-gray-800 p-4 rounded-lg shadow-md">
+                <h2 class="font-bold mb-2 text-white">5. Project Description</h2>
+                <textarea id="project-description-input" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Describe your research goals..."></textarea>
+            </div>
+
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
                  <div class="flex justify-between items-center mb-2">
-                    <h2 class="font-bold text-white">5. Analysis Pipeline</h2>
+                    <h2 class="font-bold text-white">6. Analysis Pipeline</h2>
                     <div class="relative" id="add-task-dropdown-container">
                         <button id="add-task-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md flex items-center">
                             Add Task <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -111,7 +118,7 @@
             </div>
 
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
-                <h2 class="font-bold mb-2 text-white">6. Estimate & Run 🔹</h2>
+                <h2 class="font-bold mb-2 text-white">7. Estimate & Run 🔹</h2>
                 <div class="bg-gray-900 p-3 rounded-lg text-center">
                     <p class="text-sm text-gray-400">Estimated Cost</p>
                     <p id="cost-estimate" class="text-2xl font-mono text-green-400">$0.00</p>
