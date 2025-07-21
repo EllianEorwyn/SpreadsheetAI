@@ -2,86 +2,68 @@
 
 An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, define custom analyses, and batch-process each row through an LLM—all in your browser, with live token-count and cost estimates.
 
-## 🚀 Purpose & Scope
+## 🔍 Key Features
 
-- **Goal:**  
-  1. Upload a CSV/XLSX spreadsheet  
-  2. Define one or more “analysis tasks” (e.g. analyze a column, compare columns)  
-  3. Let the LLM process each row  
-  4. Download a new spreadsheet with your analysis results  
+### 🧠 LLM-Driven Spreadsheet Processing
+- Upload a CSV and define custom NLP or logic tasks.
+- Model processes each row individually based on user-defined prompts.
+- Results are written back to the spreadsheet in new or specified columns.
 
-- **Core Values:**  
-  - **Transparency:** see exactly what prompts are sent  
-  - **Reproducibility:** save/load profiles & pipelines  
-  - **User Control:** pick models, tune tokens & cost  
-  - **Privacy:** all processing happens client-side  
-  - **Cost-Awareness:** live token and dollar estimates  
+### 🧩 Multi-Task Architecture
+- Supports multiple task types:
+  - **Analyze**: Single-column analysis (e.g., classify, summarize).
+  - **Compare**: Cross-column comparisons (e.g., detect contradiction, compare stance).
+  - **Custom**: Fully flexible prompts referencing any column.
+  - **Auto-Generated**: Uses the model to suggest tasks for empty columns.
 
----
+### 📋 Built-in Task Presets
+- One-click templates for common social-science and text analysis tasks:
+  - Sentiment, Emotion, Topic Detection
+  - Summarization
+  - Named Entity Extraction
+  - Headline Generation
+  - Stance Detection
+  - Contradiction Detection
 
-## 🎨 High-Level Workflow & UI Elements
+### ✨ Prompt Engineering Support
+- Use `{{ColumnName}}` to dynamically insert row data.
+- Reference full rows using the `Include row context` toggle.
+- Auto-generate task prompts based on data preview and task goal.
 
-1. **File Upload**  
-   - **Component:** **Upload Spreadsheet** (CSV/XLSX drag-and-drop or click)  
-   - **Outcome:** Data Preview Table shows your header row + first 5 rows  
+### 🔍 Test Mode
+- Step through rows manually for any task.
+- Preview the row, generated prompt, and AI response.
+- Rerun and edit tasks interactively.
 
-2. **Analysis Pipeline**  
-   - **Panel:** **Analysis Pipeline** (collapsible)  
-   - **Action:** **Add Task** dropdown → “Analyze Column” / “Compare Columns”  
-   - **Task Card:** choose source column(s), name output column, enter instructions, set max tokens  
+### 📊 Inline Output Analysis
+- For each generated output column:
+  - Show type detection (numeric, categorical, text)
+  - Display charts:
+    - Histogram (numeric)
+    - Bar chart (categorical)
+    - Word cloud (text)
+  - Export summary statistics and frequency tables
+  - Log scale toggle for numeric data
 
-3. **Global Settings**  
-   - **Sidebar:** **Settings**  
-   - **Controls:** API provider, API key, model selector, cost per million tokens, local-LLM toggle  
+### 🔎 Validation Tools
+- Reliability Checks (Cohen's Kappa and exact match)
+- Consistency between columns (Pearson or pairwise)
+- Missing Output Audit
+- Prompt Stability Test (token-level diff)
+- Face Validity Export (sampled rows with human vs. AI output)
 
-4. **Token & Cost Estimator**  
-   - **Estimator Panel:** shows input tokens, estimated output tokens, estimated cost  
-   - **Controls:** “Recalculate” button, “Dry Run” toggle  
+### 🛠️ Model Configuration
+- Supports OpenAI, Gemini, and local Ollama models
+- Dynamic model fetch for OpenAI and Ollama
+- Cost and token estimates updated live
+- Auto-fill models based on API key / local instance
 
-5. **Processing Controls**  
-   - **Buttons:**  
-     - **Run Batch Analysis**  
-     - **Enable Test Mode** toggle  
-     - **Start Interactive Review** (row-by-row QA)  
+### 💾 Profile Management
+- Save and load complete analysis profiles as JSON
+- Includes model config, system prompt, tasks, and validation settings
 
-6. **Progress & Output**  
-   - **Progress Bar**  
-   - **Status Toasts** (errors, warnings)  
-   - **Download Processed Spreadsheet** button
-   - **View Audit Log** (JSON/CSV)
-
-### Prompt Variables
-
-Task instructions can reference spreadsheet data using placeholder syntax:
-
-- `{{COLUMN}}` – replaced with the value from the selected source column (for Analyze tasks).
-- `{{Column Name}}` – replaced with the value from any column in the current row.
-
-Each prompt is also prepended with a hidden "row context" block containing all column values so the model has the full row data without repeating it in the output.
-
----
-
-## 💻 Running Locally
-
-1. Clone or download this repository.
-2. Open `index.html` in your preferred browser to launch the app offline. No server is required.
-
-### Optional npm tooling
-
-If network access is available, install optional development tools:
-
-```bash
-npm install
-```
-
-This installs potential linters, bundlers, or other dev utilities.
-
-## 🤝 Contributing
-
-We welcome issues and pull requests.
-
-1. Fork the project and create a feature branch.
-2. Make your changes with clear commit messages.
-3. Open a PR referencing any related issues.
-4. After review, your contribution can be merged.
+### 📥 Export Options
+- Download processed CSV
+- Export full audit log (token usage, prompts, outputs)
+- Export face validity samples
 
