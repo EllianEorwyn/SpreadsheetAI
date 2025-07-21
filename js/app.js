@@ -57,6 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
         testModeNextBtn: document.getElementById('test-mode-next-btn'),
         saveProfileBtn: document.getElementById('save-profile-btn'),
         loadProfileInput: document.getElementById('load-profile-input'),
+        includeRowContextToggle: document.getElementById('include-row-context-toggle'),
+        checkMissingOutputs: document.getElementById('check-missing-outputs'),
+        promptStability: document.getElementById('prompt-stability'),
+        consistencyCheck: document.getElementById('consistency-check'),
+        consistencyColumns: document.getElementById('consistency-columns'),
+        faceValidity: document.getElementById('face-validity'),
     };
 
     // --- State Management ---
@@ -69,11 +75,14 @@ document.addEventListener('DOMContentLoaded', () => {
             startTime: new Date().toISOString(),
             entries: [],
             totalInputTokens: 0,
-            totalOutputTokens: 0
+            totalOutputTokens: 0,
+            validations: []
         },
         analysisTasks: [],
         availableModels: { openai: [], ollama: [] },
-        testMode: { isActive: false, task: null, currentIndex: 0 }
+        testMode: { isActive: false, task: null, currentIndex: 0 },
+        includeRowContext: true,
+        validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false }
     };
     
     const MODEL_PRICING = {
@@ -196,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt = prompt.replace(regex, row[header] || '');
         });
 
-        return `${buildRowContext(row)}\n\n${prompt}`;
+        return `${appState.includeRowContext ? buildRowContext(row) + '\n\n' : ''}${prompt}`;
     }
 
     const updateCostEstimate = () => {
@@ -234,6 +243,128 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.costEstimate.textContent = `$${cost.toFixed(4)}`;
         ui.tokenEstimate.textContent = `~${totalTokens.toLocaleString()} tokens`;
     };
+
+    function computeKappa(a, b) {
+        const n = a.length;
+        const cats = [...new Set([...a, ...b])];
+        const freqA = {}, freqB = {};
+        cats.forEach(c => { freqA[c] = 0; freqB[c] = 0; });
+        let agree = 0;
+        for (let i = 0; i < n; i++) {
+            const ai = a[i];
+            const hi = b[i];
+            if (ai === hi) agree++;
+            freqA[ai] = (freqA[ai] || 0) + 1;
+            freqB[hi] = (freqB[hi] || 0) + 1;
+        }
+        const p0 = agree / n;
+        let pe = 0;
+        cats.forEach(c => { pe += (freqA[c] / n) * (freqB[c] / n); });
+        return (p0 - pe) / (1 - pe);
+    }
+
+    function pearsonCorrelation(x, y) {
+        const n = x.length;
+        const meanX = x.reduce((a, b) => a + b, 0) / n;
+        const meanY = y.reduce((a, b) => a + b, 0) / n;
+        let num = 0, dx = 0, dy = 0;
+        for (let i = 0; i < n; i++) {
+            const xv = x[i] - meanX;
+            const yv = y[i] - meanY;
+            num += xv * yv;
+            dx += xv * xv;
+            dy += yv * yv;
+        }
+        return num / Math.sqrt(dx * dy);
+    }
+
+    async function runValidationChecks() {
+        const results = [];
+        const total = appState.data.length;
+
+        for (const task of appState.analysisTasks) {
+            if (task.reliabilityCheck && task.reliabilityColumn) {
+                const aiVals = appState.data.map(r => r[task.outputColumn]);
+                const humanVals = appState.data.map(r => r[task.reliabilityColumn]);
+                const exact = aiVals.filter((v,i) => v === humanVals[i]).length / total;
+                const kappa = computeKappa(aiVals, humanVals);
+                const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn };
+                results.push(entry);
+                log(JSON.stringify(entry), 'VALIDATION');
+            }
+        }
+
+        if (appState.validationSettings.consistencyCheck && appState.validationSettings.consistencyColumns.length >= 2) {
+            const cols = appState.validationSettings.consistencyColumns;
+            const c1 = appState.data.map(r => r[cols[0]]);
+            const c2 = appState.data.map(r => r[cols[1]]);
+            const nums1 = c1.map(Number);
+            const nums2 = c2.map(Number);
+            let method, corr;
+            if (nums1.every(n => !isNaN(n)) && nums2.every(n => !isNaN(n))) {
+                method = 'Pearson correlation';
+                corr = pearsonCorrelation(nums1, nums2);
+            } else {
+                method = 'Pairwise agreement';
+                corr = c1.filter((v,i)=>v===c2[i]).length / total;
+            }
+            const entry = { validation: 'Consistency Check', columns: cols, method, correlation: Number(corr.toFixed(2)) };
+            results.push(entry);
+            log(JSON.stringify(entry), 'VALIDATION');
+        }
+
+        if (appState.validationSettings.missingCheck) {
+            for (const task of appState.analysisTasks) {
+                const vals = appState.data.map(r => r[task.outputColumn]);
+                const empty = vals.filter(v => v === '' || v === null || v === undefined || v === 'ERROR').length;
+                const entry = { validation: 'Missing Output Check', column: task.outputColumn, empty_rows: empty, total_rows: total, percentage: Number((empty * 100 / total).toFixed(2)) };
+                results.push(entry);
+                log(JSON.stringify(entry), 'VALIDATION');
+            }
+        }
+
+        if (appState.validationSettings.faceValidity) {
+            const task = appState.analysisTasks.find(t => t.reliabilityCheck && t.reliabilityColumn);
+            if (task) {
+                const sampleSize = Math.min(10, total);
+                const rows = [];
+                for (let i = 0; i < sampleSize; i++) {
+                    const idx = Math.floor(Math.random() * total);
+                    const row = appState.data[idx];
+                    rows.push({row_id: idx + 1, human_label: row[task.reliabilityColumn], ai_label: row[task.outputColumn]});
+                }
+                const csv = 'row_id,human_label,ai_label\n' + rows.map(r => `${r.row_id},"${r.human_label}","${r.ai_label}"`).join('\n');
+                downloadFile(csv, 'face_validity_sample.csv', 'text/csv;charset=utf-8;');
+                const entry = { validation: 'Face Validity Sample', rows: sampleSize, columns: [task.reliabilityColumn, task.outputColumn] };
+                results.push(entry);
+                log(JSON.stringify(entry), 'VALIDATION');
+            }
+        }
+
+        if (appState.validationSettings.promptStability) {
+            const sampleSize = Math.min(5, total);
+            const indices = Array.from({length: sampleSize}, () => Math.floor(Math.random()*total));
+            let diffTotal = 0;
+            for (const idx of indices) {
+                const row = appState.data[idx];
+                for (const task of appState.analysisTasks) {
+                    const original = row[task.outputColumn] || '';
+                    const prompt = 'Please ' + buildPrompt(task, row);
+                    try {
+                        const result = await processWithApi(prompt, task.maxTokens);
+                        diffTotal += Math.abs(estimateTokens(result.text) - estimateTokens(original));
+                    } catch (e) {
+                        log(`Stability check error row ${idx+1}: ${e.message}`, 'ERROR');
+                    }
+                }
+            }
+            const entry = { validation: 'Prompt Stability', rows_tested: sampleSize, avg_output_diff_tokens: Number((diffTotal / (sampleSize * appState.analysisTasks.length)).toFixed(2)), variation_method: 'syntactic filler' };
+            results.push(entry);
+            log(JSON.stringify(entry), 'VALIDATION');
+        }
+
+        appState.runLog.validations = results;
+    }
 
     async function processWithApi(prompt, maxTokens) {
         const systemPrompt = ui.systemPromptInput.value;
@@ -359,16 +490,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let newTask, template;
 
         if (type === 'analyze') {
-            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
             template = ui.analyzeTaskTemplate;
         } else if (type === 'compare') {
-            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
             template = ui.compareTaskTemplate;
         } else if (type === 'custom') {
-            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
             template = ui.customTaskTemplate;
         } else if (type === "auto") {
-            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150 }, taskData);
+            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
             template = ui.autoTaskTemplate;
         } else return;
 
@@ -381,6 +512,10 @@ document.addEventListener('DOMContentLoaded', () => {
         taskCard.querySelector('input[data-type="outputColumn"]').value = newTask.outputColumn;
         taskCard.querySelector('textarea[data-type="prompt"]').value = newTask.prompt;
         taskCard.querySelector('input[data-type="maxTokens"]').value = newTask.maxTokens;
+        const relChk = taskCard.querySelector('input[data-type="reliabilityCheck"]');
+        const relSel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+        if(relChk) relChk.checked = newTask.reliabilityCheck;
+        if(relSel) { relSel.value = newTask.reliabilityColumn; relSel.disabled = !newTask.reliabilityCheck; }
 
         ui.taskContainer.appendChild(taskFragment);
         
@@ -472,6 +607,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+
+        document.querySelectorAll('.task-input[data-type="reliabilityColumn"]').forEach(dropdown => {
+            const currentVal = dropdown.value;
+            dropdown.innerHTML = '';
+            if (appState.headers.length === 0) {
+                dropdown.add(new Option('Upload a file first', ''));
+                dropdown.disabled = true;
+            } else {
+                dropdown.add(new Option('Select a column...', ''));
+                appState.headers.forEach(h => dropdown.add(new Option(h, h)));
+                dropdown.disabled = !dropdown.closest('.task-card').querySelector('input[data-type="reliabilityCheck"]').checked;
+                if (appState.headers.includes(currentVal)) dropdown.value = currentVal;
+            }
+        });
+
+        if (ui.consistencyColumns) {
+            const current = Array.from(ui.consistencyColumns.selectedOptions).map(o => o.value);
+            ui.consistencyColumns.innerHTML = '';
+            appState.headers.forEach(h => ui.consistencyColumns.add(new Option(h, h)));
+            current.forEach(val => { if (appState.headers.includes(val)) ui.consistencyColumns.querySelector(`option[value="${val}"]`).selected = true; });
+        }
     }
 
     function populateModelSelector(provider, models) {
@@ -667,6 +823,8 @@ document.addEventListener('DOMContentLoaded', () => {
             projectDescription: ui.projectDescriptionInput.value,
             additionalContext: ui.additionalContextInput.value,
             analysisTasks: appState.analysisTasks,
+            includeRowContext: appState.includeRowContext,
+            validationSettings: appState.validationSettings,
         };
 
         switch (profile.provider) {
@@ -732,6 +890,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             ui.geminiApiKeyInput.value = modelConfig.apiKey || '';
                             break;
                     }
+                }
+
+                appState.includeRowContext = profile.includeRowContext !== false;
+                ui.includeRowContextToggle.checked = appState.includeRowContext;
+                if (profile.validationSettings) {
+                    appState.validationSettings = Object.assign(appState.validationSettings, profile.validationSettings);
+                    ui.checkMissingOutputs.checked = appState.validationSettings.missingCheck;
+                    ui.consistencyCheck.checked = appState.validationSettings.consistencyCheck;
+                    ui.promptStability.checked = appState.validationSettings.promptStability;
+                    ui.faceValidity.checked = appState.validationSettings.faceValidity;
+                    updateTaskColumnDropdowns();
                 }
 
                 // --- Apply analysis tasks ---
@@ -858,7 +1027,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskCard = e.target.closest('.task-card');
         const dataType = e.target.dataset.type;
         if(taskCard && dataType) {
-            updateTaskState(taskCard.dataset.taskId, dataType, e.target.value, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
+            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
+            if(e.target.dataset.type === 'reliabilityCheck') {
+                const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+                if(sel) sel.disabled = !e.target.checked;
+            }
+        }
+    });
+
+    ui.taskContainer.addEventListener('change', (e) => {
+        const taskCard = e.target.closest('.task-card');
+        const dataType = e.target.dataset.type;
+        if(taskCard && dataType) {
+            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
+            if(e.target.dataset.type === 'reliabilityCheck') {
+                const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+                if(sel) sel.disabled = !e.target.checked;
+            }
         }
     });
 
@@ -883,6 +1070,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const task of appState.analysisTasks) {
             if (!newHeaders.includes(task.outputColumn)) newHeaders.push(task.outputColumn);
+            appState.runLog.entries.push({ task: task.outputColumn, row_context_included: appState.includeRowContext, timestamp: new Date().toISOString() });
             
             for (let i = 0; i < processedData.length; i++) {
                 const row = processedData[i];
@@ -901,6 +1089,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         appState.data = processedData;
         appState.headers = newHeaders;
+        await runValidationChecks();
         renderDataPreview();
         log('Pipeline finished successfully!', 'SUCCESS');
         setProcessingState(false);
@@ -949,6 +1138,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if(card) guessTaskPrompt(card, e.target);
         }
     });
+    ui.includeRowContextToggle.addEventListener('change', e => { appState.includeRowContext = e.target.checked; updateCostEstimate(); });
+    ui.checkMissingOutputs.addEventListener('change', e => appState.validationSettings.missingCheck = e.target.checked);
+    ui.consistencyCheck.addEventListener('change', e => appState.validationSettings.consistencyCheck = e.target.checked);
+    ui.consistencyColumns.addEventListener('change', e => { appState.validationSettings.consistencyColumns = Array.from(e.target.selectedOptions).map(o => o.value); });
+    ui.faceValidity.addEventListener('change', e => appState.validationSettings.faceValidity = e.target.checked);
+    ui.promptStability.addEventListener('change', e => appState.validationSettings.promptStability = e.target.checked);
     ui.saveProfileBtn.addEventListener('click', saveProfile);
     ui.loadProfileInput.addEventListener('change', loadProfile);
 
