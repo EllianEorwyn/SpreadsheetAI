@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
         addTaskDropdownContainer: document.getElementById('add-task-dropdown-container'),
         addTaskBtn: document.getElementById('add-task-btn'),
         addTaskMenu: document.getElementById('add-task-menu'),
+        addPresetDropdownContainer: document.getElementById('add-preset-dropdown-container'),
+        addPresetBtn: document.getElementById('add-preset-btn'),
+        addPresetMenu: document.getElementById('add-preset-menu'),
         taskContainer: document.getElementById('task-container'),
         analyzeTaskTemplate: document.getElementById('analyze-task-template'),
         compareTaskTemplate: document.getElementById('compare-task-template'),
@@ -57,6 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
         testModeNextBtn: document.getElementById('test-mode-next-btn'),
         saveProfileBtn: document.getElementById('save-profile-btn'),
         loadProfileInput: document.getElementById('load-profile-input'),
+        presetModal: document.getElementById('preset-modal'),
+        presetModalTitle: document.getElementById('preset-modal-title'),
+        presetModalBody: document.getElementById('preset-modal-body'),
+        confirmPresetBtn: document.getElementById('confirm-preset-btn'),
+        cancelPresetBtn: document.getElementById('cancel-preset-btn'),
         includeRowContextToggle: document.getElementById('include-row-context-toggle'),
         checkMissingOutputs: document.getElementById('check-missing-outputs'),
         promptStability: document.getElementById('prompt-stability'),
@@ -82,7 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
         availableModels: { openai: [], ollama: [] },
         testMode: { isActive: false, task: null, currentIndex: 0 },
         includeRowContext: true,
-        validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false }
+        validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false },
+        currentPreset: null
     };
     
     const MODEL_PRICING = {
@@ -91,6 +100,57 @@ document.addEventListener('DOMContentLoaded', () => {
         'default_openai': { input: 1.00, output: 3.00 }
     };
     const DEFAULT_SYSTEM_PROMPT = "You are an AI assistant whose sole task is to process spreadsheet rows exactly as the user’s analysis tasks specify. Output only the requested content in the exact format required—no greetings, acknowledgments, or extra commentary.";
+
+    const TASK_PRESETS = {
+      "sentiment": {
+        label: "Sentiment Classification",
+        type: "analyze",
+        promptTemplate: "Classify the sentiment of this text as Positive, Negative, or Neutral:\n\n{{COLUMN}}",
+        outputColumn: "sentiment"
+      },
+      "summarize": {
+        label: "Summarize Text",
+        type: "analyze",
+        promptTemplate: "Summarize the main idea of the following text in 1-2 sentences:\n\n{{COLUMN}}",
+        outputColumn: "summary"
+      },
+      "topic": {
+        label: "Topic Detection",
+        type: "analyze",
+        promptTemplate: "Identify the topic of this text in one or two words (e.g., climate, finance, health):\n\n{{COLUMN}}",
+        outputColumn: "topic"
+      },
+      "emotion": {
+        label: "Emotion Classification",
+        type: "analyze",
+        promptTemplate: "Identify the dominant emotion expressed (e.g., joy, anger, sadness, fear, surprise):\n\n{{COLUMN}}",
+        outputColumn: "emotion"
+      },
+      "stance": {
+        label: "Identify Stance",
+        type: "compare",
+        promptTemplate: "Compare the following two statements and determine whether the second one supports, opposes, or is neutral toward the first:\n\n{{COLUMNS_DATA}}",
+        outputColumn: "stance"
+      },
+      "contradiction": {
+        label: "Detect Contradictions",
+        type: "compare",
+        promptTemplate: "Determine whether these two statements contradict each other:\n\n{{COLUMNS_DATA}}",
+        outputColumn: "contradiction"
+      },
+      "headline": {
+        label: "Generate Headline",
+        type: "custom",
+        promptTemplate: "Write a short, engaging headline for the following row:\n\n{{Column1}} {{Column2}} {{Column3}}",
+        outputColumn: "headline"
+      },
+      "entities": {
+        label: "Extract Entities",
+        type: "custom",
+        promptTemplate: "List all named people, organizations, and places mentioned in the text:\n\n{{text}}",
+        outputColumn: "entities"
+      }
+    };
 
     // --- Function Definitions ---
 
@@ -628,6 +688,8 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.headers.forEach(h => ui.consistencyColumns.add(new Option(h, h)));
             current.forEach(val => { if (appState.headers.includes(val)) ui.consistencyColumns.querySelector(`option[value="${val}"]`).selected = true; });
         }
+
+        updatePresetDropdowns();
     }
 
     function populateModelSelector(provider, models) {
@@ -680,6 +742,88 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             log(`Failed to auto-generate tasks: ${error.message}`, 'ERROR');
         }
+    }
+
+    function openPresetModal(key) {
+        const preset = TASK_PRESETS[key];
+        if (!preset) return;
+        appState.currentPreset = key;
+        ui.presetModalTitle.textContent = `Configure: ${preset.label}`;
+        ui.presetModalBody.innerHTML = '';
+        if (preset.type === 'analyze') {
+            const label = document.createElement('label');
+            label.className = 'block text-sm font-medium text-gray-400 mb-1';
+            label.textContent = 'Select Source Column';
+            const select = document.createElement('select');
+            select.id = 'preset-source-1';
+            select.className = 'w-full bg-gray-700 border border-gray-600 rounded-md p-2';
+            ui.presetModalBody.appendChild(label);
+            ui.presetModalBody.appendChild(select);
+        } else if (preset.type === 'compare') {
+            ['First Column', 'Second Column'].forEach((txt, i) => {
+                const label = document.createElement('label');
+                label.className = 'block text-sm font-medium text-gray-400 mt-2 mb-1';
+                label.textContent = txt;
+                const select = document.createElement('select');
+                select.id = `preset-source-${i+1}`;
+                select.className = 'w-full bg-gray-700 border border-gray-600 rounded-md p-2';
+                ui.presetModalBody.appendChild(label);
+                ui.presetModalBody.appendChild(select);
+            });
+        } else {
+            const p = document.createElement('p');
+            p.className = 'text-sm text-gray-300';
+            p.textContent = 'This task has no required source columns.';
+            ui.presetModalBody.appendChild(p);
+        }
+        updatePresetDropdowns();
+        ui.presetModal.classList.remove('hidden');
+    }
+
+    function closePresetModal() {
+        appState.currentPreset = null;
+        ui.presetModal.classList.add('hidden');
+    }
+
+    function updatePresetDropdowns() {
+        ui.presetModalBody.querySelectorAll('select').forEach(sel => {
+            const currentVal = sel.value;
+            sel.innerHTML = '';
+            if (appState.headers.length === 0) {
+                sel.add(new Option('Upload a file first', ''));
+                sel.disabled = true;
+            } else {
+                sel.add(new Option('Select column...', ''));
+                appState.headers.forEach(h => sel.add(new Option(h, h)));
+                sel.disabled = false;
+                if (appState.headers.includes(currentVal)) sel.value = currentVal;
+            }
+        });
+    }
+
+    function confirmPresetTask() {
+        const key = appState.currentPreset;
+        const preset = TASK_PRESETS[key];
+        if (!preset) return;
+        let taskData = { outputColumn: preset.outputColumn, maxTokens: 150, presetLabel: preset.label };
+        let prompt = preset.promptTemplate;
+        if (preset.type === 'analyze') {
+            const col = document.getElementById('preset-source-1').value;
+            if (!col) { alert('Select a column'); return; }
+            taskData.sourceColumn = col;
+            prompt = prompt.replace('{{COLUMN}}', `{{${col}}}`);
+        } else if (preset.type === 'compare') {
+            const c1 = document.getElementById('preset-source-1').value;
+            const c2 = document.getElementById('preset-source-2').value;
+            if (!c1 || !c2) { alert('Select two columns'); return; }
+            taskData.sourceColumns = [c1, c2];
+            prompt = prompt.replace('{{COLUMNS_DATA}}', `{{${c1}}}\n{{${c2}}}`);
+        }
+        taskData.prompt = prompt;
+        addAnalysisTask(preset.type, taskData);
+        closePresetModal();
+        const cards = ui.taskContainer.querySelectorAll('.task-card');
+        if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth'});
     }
 
     function gatherGuessContext() {
@@ -995,10 +1139,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     ui.addTaskBtn.addEventListener('click', () => ui.addTaskMenu.classList.toggle('hidden'));
-    
+
+    ui.addPresetBtn.addEventListener('click', () => ui.addPresetMenu.classList.toggle('hidden'));
+
     document.addEventListener('click', (e) => {
         if (!ui.addTaskDropdownContainer.contains(e.target)) {
             ui.addTaskMenu.classList.add('hidden');
+        }
+        if (!ui.addPresetDropdownContainer.contains(e.target)) {
+            ui.addPresetMenu.classList.add('hidden');
         }
     });
 
@@ -1009,6 +1158,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.addTaskMenu.classList.add("hidden");
             if (taskType === "auto") autoGenerateTask();
             else addAnalysisTask(taskType);
+        }
+    });
+
+    ui.addPresetMenu.addEventListener('click', (e) => {
+        e.preventDefault();
+        const presetKey = e.target.dataset.presetKey;
+        if (presetKey) {
+            ui.addPresetMenu.classList.add('hidden');
+            openPresetModal(presetKey);
         }
     });
     ui.taskContainer.addEventListener('click', (e) => {
@@ -1138,6 +1296,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if(card) guessTaskPrompt(card, e.target);
         }
     });
+    ui.confirmPresetBtn.addEventListener('click', confirmPresetTask);
+    ui.cancelPresetBtn.addEventListener('click', closePresetModal);
     ui.includeRowContextToggle.addEventListener('change', e => { appState.includeRowContext = e.target.checked; updateCostEstimate(); });
     ui.checkMissingOutputs.addEventListener('change', e => appState.validationSettings.missingCheck = e.target.checked);
     ui.consistencyCheck.addEventListener('change', e => appState.validationSettings.consistencyCheck = e.target.checked);
