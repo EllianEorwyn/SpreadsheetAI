@@ -119,16 +119,35 @@
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
                  <div class="flex justify-between items-center mb-2">
                     <h2 class="font-bold text-white">7. Analysis Pipeline</h2>
-                    <div class="relative" id="add-task-dropdown-container">
-                        <button id="add-task-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md flex items-center">
-                            Add Task <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </button>
-                        <div id="add-task-menu" class="hidden absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
-                            <div class="py-1" role="menu" aria-orientation="vertical">
-                                <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="analyze">Analyze Single Column</a>
-                                <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="compare">Compare Columns</a>
-                                <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="custom">Custom Analysis</a>
-                                <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="auto">Auto-Generate Task</a>
+                    <div class="flex items-center space-x-2">
+                        <div class="relative" id="add-task-dropdown-container">
+                            <button id="add-task-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md flex items-center">
+                                Add Task <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="add-task-menu" class="hidden absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
+                                <div class="py-1" role="menu" aria-orientation="vertical">
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="analyze">Analyze Single Column</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="compare">Compare Columns</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="custom">Custom Analysis</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600" role="menuitem" data-task-type="auto">Auto-Generate Task</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="relative" id="add-preset-dropdown-container">
+                            <button id="add-preset-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md flex items-center">
+                                Add Common Task <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="add-preset-menu" class="hidden absolute right-0 mt-2 w-72 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 z-10">
+                                <div class="py-1 text-sm" role="menu" aria-orientation="vertical">
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="sentiment">Sentiment Classification (Single Column)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="summarize">Summarize Text (Single Column)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="topic">Topic Detection (Single Column)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="emotion">Emotion Classification (Single Column)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="contradiction">Detect Contradictions (Compare Two Columns)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="stance">Identify Stance (Compare Two Columns)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="headline">Generate Headline (Custom)</a>
+                                    <a href="#" class="block px-4 py-2 text-gray-300 hover:bg-gray-600" role="menuitem" data-preset-key="entities">Extract Entities (Custom)</a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -388,6 +407,19 @@
             <button id="test-mode-prev-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Previous</button>
             <button id="test-mode-rerun-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-md">Rerun</button>
             <button id="test-mode-next-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Next</button>
+        </div>
+    </div>
+</div>
+
+<div id="preset-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div class="p-6">
+            <h3 id="preset-modal-title" class="text-lg font-bold text-white mb-4">Configure Preset</h3>
+            <div id="preset-modal-body" class="space-y-4"></div>
+            <div class="mt-6 flex justify-end space-x-2">
+                <button id="confirm-preset-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">Add Task</button>
+                <button id="cancel-preset-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+            </div>
         </div>
     </div>
 </div>
