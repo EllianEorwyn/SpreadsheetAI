@@ -71,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
         consistencyCheck: document.getElementById('consistency-check'),
         consistencyColumns: document.getElementById('consistency-columns'),
         faceValidity: document.getElementById('face-validity'),
+        analysisDashboardPanel: document.getElementById('analysis-dashboard-panel'),
+        analysisDashboard: document.getElementById('analysis-dashboard'),
     };
 
     // --- State Management ---
@@ -226,6 +228,171 @@ document.addEventListener('DOMContentLoaded', () => {
         table.appendChild(tbody);
         ui.dataPreview.innerHTML = '';
         ui.dataPreview.appendChild(table);
+    };
+
+    const detectColumnInfo = (values) => {
+        const clean = values.filter(v => v !== undefined && v !== null && v !== '' && v !== 'ERROR');
+        const blankPct = values.length ? ((values.length - clean.length) / values.length * 100).toFixed(1) : 0;
+        const numericVals = clean.map(v => parseFloat(v)).filter(v => !isNaN(v));
+        let type = 'text';
+        if (numericVals.length === clean.length && clean.length > 0) {
+            type = 'numeric';
+        } else {
+            const unique = [...new Set(clean)];
+            const avgLen = clean.reduce((a, b) => a + String(b).length, 0) / (clean.length || 1);
+            if (unique.length <= 20 && avgLen <= 20) type = 'categorical';
+        }
+        return { clean, blankPct, type, numericVals };
+    };
+
+    const createFrequencyTable = (counts, total) => {
+        const table = document.createElement('table');
+        table.className = 'w-full text-xs text-left mt-2';
+        const thead = document.createElement('thead');
+        thead.innerHTML = '<tr><th class="pr-2">Value</th><th class="pr-2">Count</th><th>%</th></tr>';
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([val,c]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="pr-2">${val}</td><td class="pr-2">${c}</td><td>${((c/total)*100).toFixed(1)}</td>`;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        return table;
+    };
+
+    const createNumericStats = (nums) => {
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+        const mean = nums.reduce((a,b) => a+b,0) / nums.length;
+        const sd = Math.sqrt(nums.reduce((a,b)=>a+Math.pow(b-mean,2),0)/nums.length);
+        const outliers = nums.filter(v => Math.abs(v-mean) > 2*sd).length;
+        const div = document.createElement('div');
+        div.className = 'text-xs mt-2 text-gray-300';
+        div.textContent = `Min: ${min.toFixed(2)} Max: ${max.toFixed(2)} Mean: ${mean.toFixed(2)} StdDev: ${sd.toFixed(2)} Outliers: ${outliers}`;
+        return div;
+    };
+
+    const createBarChart = (labels, data, logScale=false) => {
+        const canvas = document.createElement('canvas');
+        new Chart(canvas, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Count', data, backgroundColor: '#60a5fa' }] },
+            options: { scales: { y: { beginAtZero: true, type: logScale ? 'logarithmic' : 'linear' } } }
+        });
+        return canvas;
+    };
+
+    const createHistogram = (nums, bins=10, logScale=false) => {
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+        const step = (max - min) / bins || 1;
+        const counts = Array(bins).fill(0);
+        nums.forEach(v => { const idx = Math.min(bins-1, Math.floor((v-min)/step)); counts[idx]++; });
+        const labels = counts.map((_,i)=>`${(min+i*step).toFixed(1)}-${(min+(i+1)*step).toFixed(1)}`);
+        return createBarChart(labels, counts, logScale);
+    };
+
+    const createWordCloud = (words) => {
+        const canvas = document.createElement('canvas');
+        const list = Object.entries(words).map(([w,c]) => [w, c]);
+        setTimeout(() => WordCloud(canvas, { list, backgroundColor:'#111827' }), 0);
+        return canvas;
+    };
+
+    const renderAnalysisDashboard = () => {
+        const outputCols = appState.analysisTasks.map(t => t.outputColumn).filter(c => c && appState.headers.includes(c));
+        if (outputCols.length === 0) { ui.analysisDashboardPanel.classList.add('hidden'); return; }
+        ui.analysisDashboard.innerHTML = '';
+        outputCols.forEach(col => {
+            const values = appState.data.map(r => r[col]);
+            const info = detectColumnInfo(values);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'border border-gray-700 rounded';
+
+            const header = document.createElement('button');
+            header.className = 'w-full text-left px-2 py-1 bg-gray-700 flex justify-between items-center';
+            header.innerHTML = `<span>${col}</span><span class="toggle">+</span>`;
+
+            const content = document.createElement('div');
+            content.className = 'hidden p-2';
+            const summary = document.createElement('div');
+            summary.className = 'text-sm mb-2 text-gray-300';
+            summary.textContent = `Non-null: ${info.clean.length} | Blank/Error: ${info.blankPct}% | Type: ${info.type}`;
+            content.appendChild(summary);
+
+            let chart, table, stats;
+            if (info.type === 'numeric') {
+                chart = createHistogram(info.numericVals);
+                stats = createNumericStats(info.numericVals);
+                content.appendChild(chart);
+                content.appendChild(stats);
+            } else if (info.type === 'categorical') {
+                const counts = {};
+                info.clean.forEach(v => { counts[v] = (counts[v]||0)+1; });
+                chart = createBarChart(Object.keys(counts), Object.values(counts));
+                table = createFrequencyTable(counts, info.clean.length);
+                content.appendChild(chart);
+                content.appendChild(table);
+            } else {
+                const words = {};
+                info.clean.forEach(v => String(v).toLowerCase().split(/\W+/).forEach(w => { if(w) words[w]=(words[w]||0)+1; }));
+                chart = createWordCloud(words);
+                table = createFrequencyTable(words, Object.values(words).reduce((a,b)=>a+b,0));
+                content.appendChild(chart);
+                content.appendChild(table);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'text-xs mt-2 space-x-2';
+            if (chart) {
+                const dl = document.createElement('button');
+                dl.className = 'bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded';
+                dl.textContent = 'Download PNG';
+                dl.onclick = () => {
+                    const link = document.createElement('a');
+                    link.href = chart.toDataURL ? chart.toDataURL('image/png') : chart.firstChild.toDataURL('image/png');
+                    link.download = `${col}.png`;
+                    link.click();
+                };
+                actions.appendChild(dl);
+            }
+            if (table) {
+                const cp = document.createElement('button');
+                cp.className = 'bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded';
+                cp.textContent = 'Copy Table';
+                cp.onclick = () => {
+                    const rows = Array.from(table.querySelectorAll('tbody tr')).map(r => Array.from(r.children).map(td => td.textContent).join(','));
+                    navigator.clipboard.writeText(rows.join('\n'));
+                };
+                actions.appendChild(cp);
+            }
+            if (info.type === 'numeric') {
+                const logLabel = document.createElement('label');
+                logLabel.className = 'ml-2';
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.className = 'mr-1';
+                logLabel.appendChild(chk);
+                logLabel.appendChild(document.createTextNode('Log scale'));
+                chk.addEventListener('change', () => {
+                    chart.config.options.scales.y.type = chk.checked ? 'logarithmic' : 'linear';
+                    chart.update();
+                });
+                actions.appendChild(logLabel);
+            }
+            if (actions.childNodes.length) content.appendChild(actions);
+
+            header.addEventListener('click', () => {
+                content.classList.toggle('hidden');
+            });
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(content);
+            ui.analysisDashboard.appendChild(wrapper);
+        });
+        ui.analysisDashboardPanel.classList.remove('hidden');
     };
 
     const getModelIdentifier = () => {
@@ -1076,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.data = results.data;
                 appState.headers = results.meta.fields;
                 renderDataPreview();
+                renderAnalysisDashboard();
                 updateTaskColumnDropdowns();
                 updateCostEstimate();
                 log(`Parsed ${appState.data.length} rows with columns: ${appState.headers.join(', ')}`, 'FILE');
@@ -1249,6 +1417,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.headers = newHeaders;
         await runValidationChecks();
         renderDataPreview();
+        renderAnalysisDashboard();
         log('Pipeline finished successfully!', 'SUCCESS');
         setProcessingState(false);
         ui.downloadResultsBtn.style.display = 'inline-block';
