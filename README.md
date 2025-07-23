@@ -41,12 +41,13 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
   - Display charts:
     - Histogram (numeric)
     - Bar chart (categorical)
-    - Word cloud (text)
+  - Word cloud (text)
   - Export summary statistics and frequency tables
   - Log scale toggle for numeric data
+  - Manual override to treat columns as text or categorical
 
 ### 🔎 Validation Tools
-- Reliability Checks (Cohen's Kappa and exact match)
+- Reliability Checks (Cohen's Kappa, Krippendorff's Alpha, and exact match)
 - Consistency between columns (Pearson or pairwise)
 - Missing Output Audit
 - Prompt Stability Test (token-level diff)
