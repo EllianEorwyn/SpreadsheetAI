@@ -1,6 +1,31 @@
+/*
+ * Spreadsheet AI Processor — Front‑end logic (app.js)
+ * ---------------------------------------------------
+ * This script powers the browser‑based interface for running large‑language‑model
+ * (LLM) analyses over spreadsheet rows. It handles:
+ *   • Caching DOM element references
+ *   • Centralised application state management
+ *   • Dynamic task creation & removal (analyze / compare / custom / auto)
+ *   • CSV parsing & data preview rendering
+ *   • Prompt construction and provider‑agnostic API calls (OpenAI, Gemini, Ollama)
+ *   • Cost / token estimation
+ *   • Result validation utilities (reliability, consistency, face‑validity, etc.)
+ *   • Inline dashboard visualisations (Chart.js & WordCloud)
+ *   • Test‑mode stepping, progress UI, and audit logging
+ *
+ * The codebase is divided into clear sections.  Each section is now preceded by
+ * a short JSDoc‑style block explaining its role to help new contributors get
+ * oriented quickly.
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- DOM Elements ---
+/*
+ * This block caches frequent DOM look‑ups in a single object literal (`ui`).
+ * By keeping a stable reference, we avoid repeated `document.getElementById` calls
+ * and make component access uniform across the file.
+ */
     const ui = {
         fileInput: document.getElementById('file-input'),
         fileInfo: document.getElementById('file-info'),
@@ -76,6 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- State Management ---
+/*
+ * All ephemeral data that drives the UI lives in `appState`. Treat it as a
+ * single‑source‑of‑truth; UI setters & helper functions read/write here so that the
+ * interface stays in sync.
+ */
     let appState = {
         file: null,
         data: [],
@@ -155,6 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Function Definitions ---
+/*
+ * Helper functions are defined next.  They are organised roughly from generic
+ * utilities (logging, downloads, cost estimation) to higher‑level operations
+ * (prompt building, validation checks, API wrappers).
+ */
 
     const log = (message, type = 'SYSTEM') => {
         const p = document.createElement('p');
