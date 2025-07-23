@@ -201,6 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const estimateTokens = (text) => Math.ceil((text || '').length / 4);
 
+    const parseCodeSet = (str) => {
+        if (str === undefined || str === null) return [];
+        return String(str).split(/[;,]/).map(s => s.trim()).filter(Boolean);
+    };
+
     const downloadFile = (content, fileName, mimeType) => {
         const a = document.createElement('a');
         const blob = new Blob([content], { type: mimeType });
@@ -270,14 +275,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const blankPct = values.length ? ((values.length - clean.length) / values.length * 100).toFixed(1) : 0;
         const numericVals = clean.map(v => parseFloat(v)).filter(v => !isNaN(v));
         let type = 'text';
+        let codes = [];
         if (numericVals.length === clean.length && clean.length > 0) {
             type = 'numeric';
         } else {
             const unique = [...new Set(clean)];
             const avgLen = clean.reduce((a, b) => a + String(b).length, 0) / (clean.length || 1);
-            if (unique.length <= 20 && avgLen <= 20) type = 'categorical';
+            if (unique.length <= 20 && avgLen <= 20) {
+                type = 'categorical';
+            } else {
+                const splitCodes = clean.flatMap(v => parseCodeSet(v));
+                const uniqueCodes = [...new Set(splitCodes)];
+                if (uniqueCodes.length > 0 && uniqueCodes.length <= 20) {
+                    type = 'list';
+                    codes = uniqueCodes;
+                }
+            }
         }
-        return { clean, blankPct, type, numericVals };
+        return { clean, blankPct, type, numericVals, codes };
     };
 
     const createFrequencyTable = (counts, total) => {
@@ -366,6 +381,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (info.type === 'categorical') {
                 const counts = {};
                 info.clean.forEach(v => { counts[v] = (counts[v]||0)+1; });
+                chart = createBarChart(Object.keys(counts), Object.values(counts));
+                table = createFrequencyTable(counts, info.clean.length);
+                content.appendChild(chart);
+                content.appendChild(table);
+            } else if (info.type === 'list') {
+                const counts = {};
+                info.clean.forEach(v => parseCodeSet(v).forEach(code => { counts[code] = (counts[code]||0)+1; }));
                 chart = createBarChart(Object.keys(counts), Object.values(counts));
                 table = createFrequencyTable(counts, info.clean.length);
                 content.appendChild(chart);
@@ -546,8 +568,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const task of appState.analysisTasks) {
             if (task.reliabilityCheck && task.reliabilityColumn) {
-                const aiVals = appState.data.map(r => r[task.outputColumn]);
-                const humanVals = appState.data.map(r => r[task.reliabilityColumn]);
+                const aiValsRaw = appState.data.map(r => r[task.outputColumn]);
+                const humanValsRaw = appState.data.map(r => r[task.reliabilityColumn]);
+                const aiVals = aiValsRaw.map(v => parseCodeSet(v).sort().join('|'));
+                const humanVals = humanValsRaw.map(v => parseCodeSet(v).sort().join('|'));
                 const exact = aiVals.filter((v,i) => v === humanVals[i]).length / total;
                 const kappa = computeKappa(aiVals, humanVals);
                 const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn };
