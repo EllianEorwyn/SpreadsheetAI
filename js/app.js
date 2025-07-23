@@ -482,6 +482,71 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.analysisDashboardPanel.classList.remove('hidden');
     };
 
+    const renderReliabilityDashboard = () => {
+        const panel = document.getElementById('reliability-panel');
+        const container = document.getElementById('reliability-dashboard');
+        if (!panel || !container) return;
+
+        const results = (appState.runLog.validations || []).filter(v => v.validation === 'Intercoder Reliability');
+        container.innerHTML = '';
+
+        if (results.length === 0) { panel.classList.add('hidden'); return; }
+
+        results.forEach(r => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'border border-gray-700 rounded';
+
+            const header = document.createElement('div');
+            header.className = 'w-full px-2 py-1 bg-gray-700 flex justify-between items-center cursor-pointer';
+            const title = document.createElement('span');
+            title.textContent = `${r.task} vs ${r.reference_column}`;
+            const toggle = document.createElement('span');
+            toggle.className = 'toggle';
+            toggle.textContent = '+';
+            header.appendChild(title);
+            header.appendChild(toggle);
+
+            const content = document.createElement('div');
+            content.className = 'hidden p-2';
+
+            const table = document.createElement('table');
+            table.className = 'text-xs text-gray-300 mb-2';
+            table.innerHTML = `<thead><tr><th class="px-2 py-1 text-left">Metric</th><th class="px-2 py-1">Score</th></tr></thead>` +
+                `<tbody>` +
+                `<tr><td class="px-2 py-1">Cohen's Kappa</td><td>${r.score}</td></tr>` +
+                `<tr><td class="px-2 py-1">Krippendorff's Alpha</td><td>${r.krippendorff_alpha}</td></tr>` +
+                `<tr><td class="px-2 py-1">Exact Match</td><td>${r.exact_match}</td></tr>` +
+                `</tbody>`;
+            content.appendChild(table);
+
+            const canvas = document.createElement('canvas');
+            content.appendChild(canvas);
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ["Kappa", "Alpha", "Exact"],
+                    datasets: [{
+                        label: 'Score',
+                        data: [r.score, r.krippendorff_alpha, r.exact_match],
+                        backgroundColor: ['#60a5fa', '#c084fc', '#4ade80']
+                    }]
+                },
+                options: { scales: { y: { beginAtZero: true, max: 1 } } }
+            });
+
+            header.addEventListener('click', (e) => {
+                if (e.target.tagName.toLowerCase() === 'canvas') return;
+                content.classList.toggle('hidden');
+            });
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(content);
+            container.appendChild(wrapper);
+        });
+
+        panel.classList.remove('hidden');
+    };
+
     const getModelIdentifier = () => {
         const provider = ui.providerSelector.value;
         switch(provider) {
@@ -712,6 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         appState.runLog.validations = results;
+        renderReliabilityDashboard();
     }
 
     async function processWithApi(prompt, maxTokens) {
