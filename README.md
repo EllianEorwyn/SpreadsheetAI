@@ -47,7 +47,7 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
   - Manual override to treat columns as text or categorical
 
 ### 🔎 Validation Tools
-- Reliability Checks (Cohen's Kappa, Krippendorff's Alpha, and exact match)
+- Reliability Checks (Cohen's Kappa, Krippendorff's Alpha, and exact match) with a dedicated **Intercoder Reliability** dashboard section
 - Consistency between columns (Pearson or pairwise)
 - Missing Output Audit
 - Prompt Stability Test (token-level diff)
