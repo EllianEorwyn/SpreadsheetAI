@@ -53,6 +53,13 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
 - Prompt Stability Test (token-level diff)
 - Face Validity Export (sampled rows with human vs. AI output)
 
+### 🖥️ AI Output Analysis Dashboard
+- Explore charts and summary statistics for each generated column
+- The **Intercoder Reliability** panel visualizes agreement scores
+- Krippendorff's Alpha supports multi-label coding by treating coder annotations as sets and calculating disagreement via Jaccard distance
+- Observed disagreement averages pairwise distances across units, while expected disagreement samples from the empirical distribution of code sets
+- Partial overlap earns a distance between 0 and 1, so partial agreement is rewarded more than total disagreement but less than a perfect match
+
 ### 🛠️ Model Configuration
 - Supports OpenAI, Gemini, and local Ollama models
 - Dynamic model fetch for OpenAI and Ollama
