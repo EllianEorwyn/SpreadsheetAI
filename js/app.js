@@ -777,12 +777,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const relChk = taskCard.querySelector('input[data-type="reliabilityCheck"]');
         const relSel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
         if(relChk) relChk.checked = newTask.reliabilityCheck;
-        if(relSel) { relSel.value = newTask.reliabilityColumn; relSel.disabled = !newTask.reliabilityCheck; }
+        if(relSel) {
+            relSel.value = newTask.reliabilityColumn;
+            relSel.dataset.savedValue = newTask.reliabilityColumn;
+            relSel.disabled = !newTask.reliabilityCheck;
+        }
 
         ui.taskContainer.appendChild(taskFragment);
         
         if (type === 'analyze') {
-            taskCard.querySelector('select[data-type="sourceColumn"]').value = newTask.sourceColumn;
+            const srcSel = taskCard.querySelector('select[data-type="sourceColumn"]');
+            srcSel.value = newTask.sourceColumn;
+            srcSel.dataset.savedValue = newTask.sourceColumn;
         } else if (type === 'compare') {
             if (newTask.sourceColumns.length === 0) {
                  addColumnToCompareTask(taskCard);
@@ -820,6 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
         select.dataset.type = 'sourceColumn';
         select.dataset.index = newIndex;
         select.value = value;
+        select.dataset.savedValue = value;
         colDiv.appendChild(select);
 
         const removeBtn = document.createElement('button');
@@ -855,32 +862,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateTaskColumnDropdowns() {
         document.querySelectorAll('.task-input[data-type="sourceColumn"]').forEach(dropdown => {
-            const currentVal = dropdown.value;
+            const saved = dropdown.dataset.savedValue || '';
+            const currentVal = saved || dropdown.value;
             dropdown.innerHTML = '';
             if (appState.headers.length === 0) {
                 dropdown.add(new Option('Upload a file first', ''));
                 dropdown.disabled = true;
+                dropdown.value = '';
+                dropdown.dataset.savedValue = saved;
             } else {
                 dropdown.add(new Option('Select a column...', ''));
                 appState.headers.forEach(header => dropdown.add(new Option(header, header)));
                 dropdown.disabled = false;
                 if (appState.headers.includes(currentVal)) {
                     dropdown.value = currentVal;
+                    dropdown.dataset.savedValue = currentVal;
+                } else {
+                    dropdown.value = '';
+                    dropdown.dataset.savedValue = saved;
                 }
             }
         });
 
         document.querySelectorAll('.task-input[data-type="reliabilityColumn"]').forEach(dropdown => {
-            const currentVal = dropdown.value;
+            const saved = dropdown.dataset.savedValue || '';
+            const currentVal = saved || dropdown.value;
             dropdown.innerHTML = '';
             if (appState.headers.length === 0) {
                 dropdown.add(new Option('Upload a file first', ''));
                 dropdown.disabled = true;
+                dropdown.value = '';
+                dropdown.dataset.savedValue = saved;
             } else {
                 dropdown.add(new Option('Select a column...', ''));
                 appState.headers.forEach(h => dropdown.add(new Option(h, h)));
                 dropdown.disabled = !dropdown.closest('.task-card').querySelector('input[data-type="reliabilityCheck"]').checked;
-                if (appState.headers.includes(currentVal)) dropdown.value = currentVal;
+                if (appState.headers.includes(currentVal)) {
+                    dropdown.value = currentVal;
+                    dropdown.dataset.savedValue = currentVal;
+                } else {
+                    dropdown.value = '';
+                    dropdown.dataset.savedValue = saved;
+                }
             }
         });
 
@@ -1394,6 +1417,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
                 if(sel) sel.disabled = !e.target.checked;
             }
+            if(dataType === 'sourceColumn' || dataType === 'reliabilityColumn') {
+                e.target.dataset.savedValue = val;
+            }
         }
     });
 
@@ -1406,6 +1432,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if(e.target.dataset.type === 'reliabilityCheck') {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
                 if(sel) sel.disabled = !e.target.checked;
+            }
+            if(dataType === 'sourceColumn' || dataType === 'reliabilityColumn') {
+                e.target.dataset.savedValue = val;
             }
         }
     });
