@@ -642,33 +642,53 @@ document.addEventListener('DOMContentLoaded', () => {
         return (p0 - pe) / (1 - pe);
     }
 
+    function jaccardDistance(a, b) {
+        const A = new Set(a);
+        const B = new Set(b);
+        if (A.size === 0 && B.size === 0) return 0;
+        let intersect = 0;
+        A.forEach(v => { if (B.has(v)) intersect++; });
+        const union = new Set([...A, ...B]).size;
+        return 1 - intersect / union;
+    }
+
+    function canonicalizeSet(set) {
+        return Array.from(new Set(set)).sort().join('|');
+    }
+
+    function decodeSet(str) {
+        return str ? str.split('|') : [];
+    }
+
     function computeKrippendorffAlpha(setsA, setsB) {
-        const cats = new Set();
-        setsA.concat(setsB).forEach(set => set.forEach(c => cats.add(c)));
-        const catList = Array.from(cats);
-        const O = {};
-        catList.forEach(c => { O[c] = {}; catList.forEach(d => O[c][d] = 0); });
-
-        for (let i = 0; i < setsA.length; i++) {
-            const sA = setsA[i];
-            const sB = setsB[i];
-            sA.forEach(a => { sB.forEach(b => { O[a][b] += 1; }); });
-        }
-
-        const m = {};
-        let total = 0;
-        catList.forEach(c => {
-            m[c] = 0;
-            catList.forEach(d => { m[c] += O[c][d]; total += O[c][d]; });
-        });
+        const n = setsA.length;
+        if (n === 0) return 0;
 
         let Do = 0;
-        catList.forEach(c => { catList.forEach(d => { if (c !== d) Do += O[c][d]; }); });
-        let De = 0;
-        catList.forEach(c => { catList.forEach(d => { if (c !== d) De += (m[c] * m[d]); }); });
-        De = De / (total - 1 || 1);
+        for (let i = 0; i < n; i++) {
+            Do += jaccardDistance(setsA[i], setsB[i]);
+        }
+        Do /= n;
 
-        return De === 0 ? 0 : 1 - (Do / De);
+        const freq = {};
+        setsA.concat(setsB).forEach(set => {
+            const key = canonicalizeSet(set);
+            freq[key] = (freq[key] || 0) + 1;
+        });
+        const total = setsA.length + setsB.length;
+        const keys = Object.keys(freq);
+
+        let De = 0;
+        for (const k1 of keys) {
+            for (const k2 of keys) {
+                const p = (freq[k1] / total) * (freq[k2] / total);
+                if (p === 0) continue;
+                De += p * jaccardDistance(decodeSet(k1), decodeSet(k2));
+            }
+        }
+
+        if (De === 0) return Do === 0 ? 1 : 0;
+        return 1 - (Do / De);
     }
 
     function pearsonCorrelation(x, y) {
