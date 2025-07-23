@@ -514,7 +514,9 @@ document.addEventListener('DOMContentLoaded', () => {
             table.innerHTML = `<thead><tr><th class="px-2 py-1 text-left">Metric</th><th class="px-2 py-1">Score</th></tr></thead>` +
                 `<tbody>` +
                 `<tr><td class="px-2 py-1">Cohen's Kappa</td><td>${r.score}</td></tr>` +
-                `<tr><td class="px-2 py-1">Krippendorff's Alpha</td><td>${r.krippendorff_alpha}</td></tr>` +
+                `<tr><td class="px-2 py-1">Krippendorff's Alpha (${r.distance})</td><td>${r.krippendorff_alpha}</td></tr>` +
+                `<tr><td class="px-2 py-1">Observed Disagreement</td><td>${r.observed_disagreement}</td></tr>` +
+                `<tr><td class="px-2 py-1">Expected Disagreement</td><td>${r.expected_disagreement}</td></tr>` +
                 `<tr><td class="px-2 py-1">Exact Match</td><td>${r.exact_match}</td></tr>` +
                 `</tbody>`;
             content.appendChild(table);
@@ -524,11 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
             new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: ["Kappa", "Alpha", "Exact"],
+                    labels: ["Kappa", "Alpha", "Exact", "D_o", "D_e"],
                     datasets: [{
                         label: 'Score',
-                        data: [r.score, r.krippendorff_alpha, r.exact_match],
-                        backgroundColor: ['#60a5fa', '#c084fc', '#4ade80']
+                        data: [r.score, r.krippendorff_alpha, r.exact_match, r.observed_disagreement, r.expected_disagreement],
+                        backgroundColor: ['#60a5fa', '#c084fc', '#4ade80', '#f472b6', '#fbbf24']
                     }]
                 },
                 options: { scales: { y: { beginAtZero: true, max: 1 } } }
@@ -652,6 +654,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return 1 - intersect / union;
     }
 
+    function binaryDistance(a, b) {
+        return canonicalizeSet(a) === canonicalizeSet(b) ? 0 : 1;
+    }
+
+    function masiDistance(a, b) {
+        const A = new Set(a);
+        const B = new Set(b);
+        const interSize = [...A].filter(x => B.has(x)).length;
+        const unionSize = new Set([...A, ...B]).size;
+        if (unionSize === 0) return 0;
+        if (interSize === 0) return 1;
+        const A_subset_B = [...A].every(x => B.has(x));
+        const B_subset_A = [...B].every(x => A.has(x));
+        let w;
+        if (A_subset_B && B_subset_A) w = 1;
+        else if (A_subset_B || B_subset_A) w = 1/3;
+        else w = 2/3;
+        const similarity = w * interSize / unionSize;
+        return 1 - similarity;
+    }
+
     function canonicalizeSet(set) {
         return Array.from(new Set(set)).sort().join('|');
     }
@@ -660,13 +683,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return str ? str.split('|') : [];
     }
 
-    function computeKrippendorffAlpha(setsA, setsB) {
+    function computeKrippendorffAlpha(setsA, setsB, method = 'jaccard') {
         const n = setsA.length;
-        if (n === 0) return 0;
+        if (n === 0) return { alpha: 0, Do: 0, De: 0 };
+
+        const distanceFn = method === 'binary' ? binaryDistance : (method === 'masi' ? masiDistance : jaccardDistance);
 
         let Do = 0;
         for (let i = 0; i < n; i++) {
-            Do += jaccardDistance(setsA[i], setsB[i]);
+            Do += distanceFn(setsA[i], setsB[i]);
         }
         Do /= n;
 
@@ -683,12 +708,12 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const k2 of keys) {
                 const p = (freq[k1] / total) * (freq[k2] / total);
                 if (p === 0) continue;
-                De += p * jaccardDistance(decodeSet(k1), decodeSet(k2));
+                De += p * distanceFn(decodeSet(k1), decodeSet(k2));
             }
         }
 
-        if (De === 0) return Do === 0 ? 1 : 0;
-        return 1 - (Do / De);
+        if (De === 0) return { alpha: Do === 0 ? 1 : 0, Do, De };
+        return { alpha: 1 - (Do / De), Do, De };
     }
 
     function pearsonCorrelation(x, y) {
@@ -720,8 +745,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const humanVals = humanSets.map(s => s.slice().sort().join('|'));
                 const exact = aiVals.filter((v,i) => v === humanVals[i]).length / total;
                 const kappa = computeKappa(aiVals, humanVals);
-                const alpha = computeKrippendorffAlpha(aiSets, humanSets);
-                const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), krippendorff_alpha: Number(alpha.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn };
+                const { alpha, Do, De } = computeKrippendorffAlpha(aiSets, humanSets, task.reliabilityMethod);
+                const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), krippendorff_alpha: Number(alpha.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn, distance: task.reliabilityMethod || 'jaccard', observed_disagreement: Number(Do.toFixed(2)), expected_disagreement: Number(De.toFixed(2)) };
                 results.push(entry);
                 log(JSON.stringify(entry), 'VALIDATION');
             }
@@ -924,16 +949,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let newTask, template;
 
         if (type === 'analyze') {
-            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.analyzeTaskTemplate;
         } else if (type === 'compare') {
-            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.compareTaskTemplate;
         } else if (type === 'custom') {
-            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.customTaskTemplate;
         } else if (type === "auto") {
-            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '' }, taskData);
+            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.autoTaskTemplate;
         } else return;
 
@@ -948,11 +973,16 @@ document.addEventListener('DOMContentLoaded', () => {
         taskCard.querySelector('input[data-type="maxTokens"]').value = newTask.maxTokens;
         const relChk = taskCard.querySelector('input[data-type="reliabilityCheck"]');
         const relSel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+        const relMethod = taskCard.querySelector('select[data-type="reliabilityMethod"]');
         if(relChk) relChk.checked = newTask.reliabilityCheck;
         if(relSel) {
             relSel.value = newTask.reliabilityColumn;
             relSel.dataset.savedValue = newTask.reliabilityColumn;
             relSel.disabled = !newTask.reliabilityCheck;
+        }
+        if(relMethod) {
+            relMethod.value = newTask.reliabilityMethod || 'jaccard';
+            relMethod.disabled = !newTask.reliabilityCheck;
         }
 
         ui.taskContainer.appendChild(taskFragment);
@@ -1077,6 +1107,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     dropdown.dataset.savedValue = saved;
                 }
             }
+        });
+
+        document.querySelectorAll('.task-input[data-type="reliabilityMethod"]').forEach(dropdown => {
+            dropdown.disabled = !dropdown.closest('.task-card').querySelector('input[data-type="reliabilityCheck"]').checked;
+            const current = dropdown.value || 'jaccard';
+            dropdown.innerHTML = '';
+            dropdown.add(new Option('Alpha Weighted (Jaccard)', 'jaccard'));
+            dropdown.add(new Option('Basic Alpha', 'binary'));
+            dropdown.add(new Option('Alpha Weighted (MASI)', 'masi'));
+            dropdown.value = current;
         });
 
         if (ui.consistencyColumns) {
@@ -1587,7 +1627,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
             if(e.target.dataset.type === 'reliabilityCheck') {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+                const methodSel = taskCard.querySelector('select[data-type="reliabilityMethod"]');
                 if(sel) sel.disabled = !e.target.checked;
+                if(methodSel) methodSel.disabled = !e.target.checked;
             }
             if(dataType === 'sourceColumn' || dataType === 'reliabilityColumn') {
                 e.target.dataset.savedValue = val;
@@ -1603,7 +1645,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
             if(e.target.dataset.type === 'reliabilityCheck') {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
+                const methodSel = taskCard.querySelector('select[data-type="reliabilityMethod"]');
                 if(sel) sel.disabled = !e.target.checked;
+                if(methodSel) methodSel.disabled = !e.target.checked;
             }
             if(dataType === 'sourceColumn' || dataType === 'reliabilityColumn') {
                 e.target.dataset.savedValue = val;

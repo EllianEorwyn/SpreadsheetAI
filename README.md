@@ -59,6 +59,9 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
 - Krippendorff's Alpha supports multi-label coding by treating coder annotations as sets and calculating disagreement via Jaccard distance
 - Observed disagreement averages pairwise distances across units, while expected disagreement samples from the empirical distribution of code sets
 - Partial overlap earns a distance between 0 and 1, so partial agreement is rewarded more than total disagreement but less than a perfect match
+- Alpha weighting can be switched between **Basic** (binary match), **Jaccard**, or **MASI** distance
+- The reliability panel reports the observed disagreement ($D_o$) and expected disagreement ($D_e$) used in the alpha calculation
+- $\alpha = 1 - \frac{D_o}{D_e}$ where each distance function returns a value in $[0,1]$
 
 ### 🛠️ Model Configuration
 - Supports OpenAI, Gemini, and local Ollama models
