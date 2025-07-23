@@ -123,7 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
         testMode: { isActive: false, task: null, currentIndex: 0 },
         includeRowContext: true,
         validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false },
-        currentPreset: null
+        currentPreset: null,
+        dashboardOverrides: {}
     };
     
     const MODEL_PRICING = {
@@ -357,35 +358,63 @@ document.addEventListener('DOMContentLoaded', () => {
         outputCols.forEach(col => {
             const values = appState.data.map(r => r[col]);
             const info = detectColumnInfo(values);
+            const override = appState.dashboardOverrides[col];
+            const chosenType = override || info.type;
 
             const wrapper = document.createElement('div');
             wrapper.className = 'border border-gray-700 rounded';
 
-            const header = document.createElement('button');
-            header.className = 'w-full text-left px-2 py-1 bg-gray-700 flex justify-between items-center';
-            header.innerHTML = `<span>${col}</span><span class="toggle">+</span>`;
+            const header = document.createElement('div');
+            header.className = 'w-full px-2 py-1 bg-gray-700 flex justify-between items-center cursor-pointer';
+            const left = document.createElement('div');
+            left.className = 'flex items-center space-x-2';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = col;
+            const typeSelect = document.createElement('select');
+            ['auto','categorical','text'].forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+                typeSelect.appendChild(o);
+            });
+            typeSelect.value = override || 'auto';
+            typeSelect.className = 'bg-gray-600 text-xs text-white rounded';
+            typeSelect.addEventListener('change', (e) => {
+                const val = e.target.value;
+                if (val === 'auto') delete appState.dashboardOverrides[col];
+                else appState.dashboardOverrides[col] = val;
+                renderAnalysisDashboard();
+                e.stopPropagation();
+            });
+            left.appendChild(nameSpan);
+            left.appendChild(typeSelect);
+            const toggle = document.createElement('span');
+            toggle.className = 'toggle';
+            toggle.textContent = '+';
+            header.appendChild(left);
+            header.appendChild(toggle);
 
             const content = document.createElement('div');
             content.className = 'hidden p-2';
             const summary = document.createElement('div');
             summary.className = 'text-sm mb-2 text-gray-300';
-            summary.textContent = `Non-null: ${info.clean.length} | Blank/Error: ${info.blankPct}% | Type: ${info.type}`;
+            summary.textContent = `Non-null: ${info.clean.length} | Blank/Error: ${info.blankPct}% | Type: ${chosenType}`;
             content.appendChild(summary);
 
             let chart, table, stats;
-            if (info.type === 'numeric') {
+            if (chosenType === 'numeric') {
                 chart = createHistogram(info.numericVals);
                 stats = createNumericStats(info.numericVals);
                 content.appendChild(chart);
                 content.appendChild(stats);
-            } else if (info.type === 'categorical') {
+            } else if (chosenType === 'categorical') {
                 const counts = {};
                 info.clean.forEach(v => { counts[v] = (counts[v]||0)+1; });
                 chart = createBarChart(Object.keys(counts), Object.values(counts));
                 table = createFrequencyTable(counts, info.clean.length);
                 content.appendChild(chart);
                 content.appendChild(table);
-            } else if (info.type === 'list') {
+            } else if (chosenType === 'list') {
                 const counts = {};
                 info.clean.forEach(v => parseCodeSet(v).forEach(code => { counts[code] = (counts[code]||0)+1; }));
                 chart = createBarChart(Object.keys(counts), Object.values(counts));
@@ -425,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 actions.appendChild(cp);
             }
-            if (info.type === 'numeric') {
+            if (chosenType === 'numeric') {
                 const logLabel = document.createElement('label');
                 logLabel.className = 'ml-2';
                 const chk = document.createElement('input');
@@ -441,7 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (actions.childNodes.length) content.appendChild(actions);
 
-            header.addEventListener('click', () => {
+            header.addEventListener('click', (e) => {
+                if (e.target.tagName.toLowerCase() === 'select') return;
                 content.classList.toggle('hidden');
             });
 
@@ -547,6 +577,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return (p0 - pe) / (1 - pe);
     }
 
+    function computeKrippendorffAlpha(setsA, setsB) {
+        const cats = new Set();
+        setsA.concat(setsB).forEach(set => set.forEach(c => cats.add(c)));
+        const catList = Array.from(cats);
+        const O = {};
+        catList.forEach(c => { O[c] = {}; catList.forEach(d => O[c][d] = 0); });
+
+        for (let i = 0; i < setsA.length; i++) {
+            const sA = setsA[i];
+            const sB = setsB[i];
+            sA.forEach(a => { sB.forEach(b => { O[a][b] += 1; }); });
+        }
+
+        const m = {};
+        let total = 0;
+        catList.forEach(c => {
+            m[c] = 0;
+            catList.forEach(d => { m[c] += O[c][d]; total += O[c][d]; });
+        });
+
+        let Do = 0;
+        catList.forEach(c => { catList.forEach(d => { if (c !== d) Do += O[c][d]; }); });
+        let De = 0;
+        catList.forEach(c => { catList.forEach(d => { if (c !== d) De += (m[c] * m[d]); }); });
+        De = De / (total - 1 || 1);
+
+        return De === 0 ? 0 : 1 - (Do / De);
+    }
+
     function pearsonCorrelation(x, y) {
         const n = x.length;
         const meanX = x.reduce((a, b) => a + b, 0) / n;
@@ -570,11 +629,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (task.reliabilityCheck && task.reliabilityColumn) {
                 const aiValsRaw = appState.data.map(r => r[task.outputColumn]);
                 const humanValsRaw = appState.data.map(r => r[task.reliabilityColumn]);
-                const aiVals = aiValsRaw.map(v => parseCodeSet(v).sort().join('|'));
-                const humanVals = humanValsRaw.map(v => parseCodeSet(v).sort().join('|'));
+                const aiSets = aiValsRaw.map(v => parseCodeSet(v));
+                const humanSets = humanValsRaw.map(v => parseCodeSet(v));
+                const aiVals = aiSets.map(s => s.slice().sort().join('|'));
+                const humanVals = humanSets.map(s => s.slice().sort().join('|'));
                 const exact = aiVals.filter((v,i) => v === humanVals[i]).length / total;
                 const kappa = computeKappa(aiVals, humanVals);
-                const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn };
+                const alpha = computeKrippendorffAlpha(aiSets, humanSets);
+                const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), krippendorff_alpha: Number(alpha.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn };
                 results.push(entry);
                 log(JSON.stringify(entry), 'VALIDATION');
             }
