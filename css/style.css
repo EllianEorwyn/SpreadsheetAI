@@ -30,3 +30,16 @@
         .hidden-config, .hidden {
             display: none;
         }
+
+        /* Allow panels to be resized */
+        .resizable-y {
+            resize: vertical;
+            overflow: auto;
+            min-height: 4rem;
+        }
+
+        .resizable-x {
+            resize: horizontal;
+            overflow: auto;
+            min-width: 10rem;
+        }
