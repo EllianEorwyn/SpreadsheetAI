@@ -129,9 +129,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const MODEL_PRICING = {
-        'gemini-1.5-flash-latest': { input: 0.35, output: 0.70 },
-        'gpt-4o-mini': { input: 0.15, output: 0.60 },
-        'default_openai': { input: 1.00, output: 3.00 }
+        'gpt-4.1': { input: 2.00, cached: 0.50, output: 8.00 },
+        'gpt-4.1-mini': { input: 0.40, cached: 0.10, output: 1.60 },
+        'gpt-4.1-nano': { input: 0.10, cached: 0.03, output: 0.40 },
+        'gpt-4.5-preview': { input: 75.00, cached: 37.50, output: 150.00 },
+        'gpt-4o': { input: 2.50, cached: 1.25, output: 10.00 },
+        'gpt-4o-audio-preview': { input: 2.50, cached: 0, output: 10.00 },
+        'gpt-4o-realtime-preview': { input: 5.00, cached: 2.50, output: 20.00 },
+        'gpt-4o-mini': { input: 0.15, cached: 0.08, output: 0.60 },
+        'gpt-4o-mini-audio-preview': { input: 0.15, cached: 0, output: 0.60 },
+        'gpt-4o-mini-realtime-preview': { input: 0.60, cached: 0.30, output: 2.40 },
+        'o1': { input: 15.00, cached: 7.50, output: 60.00 },
+        'o1-pro': { input: 150.00, cached: 0, output: 600.00 },
+        'o3-pro': { input: 20.00, cached: 0, output: 80.00 },
+        'o3': { input: 2.00, cached: 0.50, output: 8.00 },
+        'o3-deep-research': { input: 10.00, cached: 2.50, output: 40.00 },
+        'o4-mini': { input: 1.10, cached: 0.28, output: 4.40 },
+        'o4-mini-deep-research': { input: 2.00, cached: 0.50, output: 8.00 },
+        'o3-mini': { input: 1.10, cached: 0.55, output: 4.40 },
+        'o1-mini': { input: 1.10, cached: 0.55, output: 4.40 },
+        'gemini-1.5-flash-latest': { input: 0.35, cached: 0, output: 0.70 },
+        'default_openai': { input: 1.00, cached: 0.00, output: 3.00 }
     };
     const DEFAULT_SYSTEM_PROMPT = "You are an AI assistant whose sole task is to process spreadsheet rows exactly as the user’s analysis tasks specify. Output only the requested content in the exact format required—no greetings, acknowledgments, or extra commentary.";
 
@@ -1529,7 +1547,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCostEstimate();
     });
     
-    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.systemPromptInput, ui.projectDescriptionInput, ui.additionalContextInput].forEach(el => el.addEventListener('input', updateCostEstimate));
+    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector].forEach(el => {
+        el.addEventListener('input', updateCostEstimate);
+        el.addEventListener('change', updateCostEstimate);
+    });
+    [ui.systemPromptInput, ui.projectDescriptionInput, ui.additionalContextInput].forEach(el => el.addEventListener('input', updateCostEstimate));
     
     ui.fetchOpenAIModelsBtn.addEventListener('click', async () => {
         const apiKey = ui.openaiApiKeyInput.value;
