@@ -54,6 +54,13 @@ document.addEventListener('DOMContentLoaded', () => {
         stopSlider: document.getElementById('stop-slider'),
         freqPenaltySlider: document.getElementById('freq-penalty-slider'),
         presPenaltySlider: document.getElementById('pres-penalty-slider'),
+        temperatureValue: document.getElementById('temperature-value'),
+        maxTokensValue: document.getElementById('max-tokens-value'),
+        topPValue: document.getElementById('top-p-value'),
+        nValue: document.getElementById('n-value'),
+        stopValue: document.getElementById('stop-value'),
+        freqPenaltyValue: document.getElementById('freq-penalty-value'),
+        presPenaltyValue: document.getElementById('pres-penalty-value'),
         ollamaUrlInput: document.getElementById('ollama-url-input'),
         fetchOllamaModelsBtn: document.getElementById('fetch-ollama-models-btn'),
         ollamaModelSelector: document.getElementById('ollama-model-selector'),
@@ -129,7 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
             entries: [],
             totalInputTokens: 0,
             totalOutputTokens: 0,
-            validations: []
+            validations: [],
+            aiParams: {}
         },
         analysisTasks: [],
         availableModels: { openai: [], ollama: [] },
@@ -1542,12 +1550,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     appState.aiParams = Object.assign(appState.aiParams, profile.aiParams);
                     ui.cachedInputsToggle.checked = appState.aiParams.cache;
                     ui.temperatureSlider.value = appState.aiParams.temperature;
+                    ui.temperatureValue.textContent = appState.aiParams.temperature;
                     ui.maxTokensSlider.value = appState.aiParams.maxTokens;
+                    ui.maxTokensValue.textContent = appState.aiParams.maxTokens;
                     ui.topPSlider.value = appState.aiParams.topP;
+                    ui.topPValue.textContent = appState.aiParams.topP;
                     ui.nSlider.value = appState.aiParams.n;
+                    ui.nValue.textContent = appState.aiParams.n;
                     ui.stopSlider.value = appState.aiParams.stop;
+                    ui.stopValue.textContent = appState.aiParams.stop;
                     ui.freqPenaltySlider.value = appState.aiParams.freqPenalty;
+                    ui.freqPenaltyValue.textContent = appState.aiParams.freqPenalty;
                     ui.presPenaltySlider.value = appState.aiParams.presPenalty;
+                    ui.presPenaltyValue.textContent = appState.aiParams.presPenalty;
                 }
 
                 // --- Apply analysis tasks ---
@@ -1600,13 +1615,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     ui.cachedInputsToggle.addEventListener('change', e => { appState.aiParams.cache = e.target.checked; updateCostEstimate(); });
-    ui.temperatureSlider.addEventListener('input', e => { appState.aiParams.temperature = parseFloat(e.target.value); });
-    ui.maxTokensSlider.addEventListener('input', e => { appState.aiParams.maxTokens = parseInt(e.target.value,10); updateCostEstimate(); });
-    ui.topPSlider.addEventListener('input', e => { appState.aiParams.topP = parseFloat(e.target.value); });
-    ui.nSlider.addEventListener('input', e => { appState.aiParams.n = parseInt(e.target.value,10); });
-    ui.stopSlider.addEventListener('input', e => { appState.aiParams.stop = parseInt(e.target.value,10); });
-    ui.freqPenaltySlider.addEventListener('input', e => { appState.aiParams.freqPenalty = parseFloat(e.target.value); });
-    ui.presPenaltySlider.addEventListener('input', e => { appState.aiParams.presPenalty = parseFloat(e.target.value); });
+    ui.temperatureSlider.addEventListener('input', e => {
+        appState.aiParams.temperature = parseFloat(e.target.value);
+        ui.temperatureValue.textContent = e.target.value;
+    });
+    ui.maxTokensSlider.addEventListener('input', e => {
+        appState.aiParams.maxTokens = parseInt(e.target.value,10);
+        ui.maxTokensValue.textContent = e.target.value;
+        updateCostEstimate();
+    });
+    ui.topPSlider.addEventListener('input', e => {
+        appState.aiParams.topP = parseFloat(e.target.value);
+        ui.topPValue.textContent = e.target.value;
+    });
+    ui.nSlider.addEventListener('input', e => {
+        appState.aiParams.n = parseInt(e.target.value,10);
+        ui.nValue.textContent = e.target.value;
+    });
+    ui.stopSlider.addEventListener('input', e => {
+        appState.aiParams.stop = parseInt(e.target.value,10);
+        ui.stopValue.textContent = e.target.value;
+    });
+    ui.freqPenaltySlider.addEventListener('input', e => {
+        appState.aiParams.freqPenalty = parseFloat(e.target.value);
+        ui.freqPenaltyValue.textContent = e.target.value;
+    });
+    ui.presPenaltySlider.addEventListener('input', e => {
+        appState.aiParams.presPenalty = parseFloat(e.target.value);
+        ui.presPenaltyValue.textContent = e.target.value;
+    });
     
     [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector].forEach(el => {
         el.addEventListener('input', updateCostEstimate);
@@ -1755,6 +1792,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         setProcessingState(true);
+        appState.runLog.startTime = new Date().toISOString();
+        appState.runLog.aiParams = { ...appState.aiParams };
         log(`Starting pipeline with ${appState.analysisTasks.length} tasks...`, 'RUN');
         
         let processedData = JSON.parse(JSON.stringify(appState.data));
@@ -1847,6 +1886,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     addAnalysisTask('analyze');
     ui.providerSelector.dispatchEvent(new Event('change'));
+    ui.temperatureValue.textContent = ui.temperatureSlider.value;
+    ui.maxTokensValue.textContent = ui.maxTokensSlider.value;
+    ui.topPValue.textContent = ui.topPSlider.value;
+    ui.nValue.textContent = ui.nSlider.value;
+    ui.stopValue.textContent = ui.stopSlider.value;
+    ui.freqPenaltyValue.textContent = ui.freqPenaltySlider.value;
+    ui.presPenaltyValue.textContent = ui.presPenaltySlider.value;
     ui.downloadLogBtn.style.display = 'inline-block';
     ui.downloadLogBtn.disabled = appState.runLog.entries.length === 0;
 });
