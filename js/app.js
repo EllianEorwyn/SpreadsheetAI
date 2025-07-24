@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
         autoTaskTemplate: document.getElementById("auto-task-template"),
         costEstimate: document.getElementById('cost-estimate'),
         tokenEstimate: document.getElementById('token-estimate'),
-        dryRunBtn: document.getElementById('dry-run-btn'),
         runBtn: document.getElementById('run-btn'),
         testModeBtn: document.getElementById('test-mode-btn'),
         progressBarContainer: document.getElementById('progress-bar-container'),

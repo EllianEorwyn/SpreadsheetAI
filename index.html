@@ -255,7 +255,6 @@
                     <p id="token-estimate" class="text-xs font-mono text-gray-500">~0 tokens</p>
                 </div>
                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <button id="dry-run-btn" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center">Dry Run</button>
                     <button id="run-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center">Run</button>
                 </div>
                  <button id="test-mode-btn" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center">Test Mode</button>
@@ -300,7 +299,9 @@
                 <h2 class="font-bold text-white">AI Output Analysis Dashboard</h2>
                 <p class="text-sm text-gray-400 mb-2">Explore results for each output column</p>
                 <div id="analysis-reliability-container" class="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
-                    <div id="analysis-dashboard" class="flex-1 overflow-y-auto space-y-2"></div>
+                    <div id="analysis-dashboard" class="flex-1 overflow-y-auto space-y-2">
+                        <h3 class="font-bold text-white mb-2">Data Visualizations</h3>
+                    </div>
                     <div id="reliability-panel" class="flex-1 hidden overflow-y-auto">
                         <h3 class="font-bold text-white mb-2">Intercoder Reliability</h3>
                         <div id="reliability-dashboard" class="space-y-2"></div>
