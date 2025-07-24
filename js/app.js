@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         faceValidity: document.getElementById('face-validity'),
         analysisDashboardPanel: document.getElementById('analysis-dashboard-panel'),
         analysisDashboard: document.getElementById('analysis-dashboard'),
+        rightPanel: document.getElementById('right-panel'),
     };
 
     // --- State Management ---
@@ -1659,11 +1660,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.isProcessing || appState.data.length === 0) { log('Cannot start run. No data loaded.', 'ERROR'); return; }
         if (appState.analysisTasks.length === 0) { log('Cannot start run. Please add at least one analysis task.', 'ERROR'); return; }
         for (const task of appState.analysisTasks) {
-            if (!task.outputColumn || !task.prompt || 
-               (task.type === 'analyze' && !task.sourceColumn) || 
+            if (!task.outputColumn || !task.prompt ||
+               (task.type === 'analyze' && !task.sourceColumn) ||
                (task.type === 'compare' && task.sourceColumns.some(sc => !sc))) {
                 log(`Task is incomplete. Please fill all fields for each task before running.`, 'ERROR'); return;
             }
+        }
+
+        if (window.innerWidth < 768) {
+            ui.rightPanel.classList.remove('hidden');
         }
         
         setProcessingState(true);
