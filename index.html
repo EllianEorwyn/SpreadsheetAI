@@ -74,9 +74,12 @@
                          <label for="gemini-api-key-input" class="block text-sm font-medium text-gray-400">API Key</label>
                          <input type="password" id="gemini-api-key-input" placeholder="AIza..." class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                          <label for="gemini-model-selector" class="block text-sm font-medium text-gray-400">Model</label>
-                         <select id="gemini-model-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest (Recommended)</option>
-                         </select>
+                         <div class="flex gap-2 items-center">
+                             <select id="gemini-model-selector" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest (Recommended)</option>
+                             </select>
+                             <button id="gemini-params-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-md">AI Params</button>
+                         </div>
                          <p class="text-xs text-gray-500">Can be used without a key in this environment.</p>
                      </div>
                      <div id="openai-config" class="config-group hidden-config space-y-2">
@@ -86,20 +89,57 @@
                              <button id="fetch-openai-models-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 rounded-md">Fetch</button>
                          </div>
                          <label for="openai-model-selector" class="block text-sm font-medium text-gray-400">Model</label>
-                         <select id="openai-model-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" disabled>
-                            <option>Enter API Key and Fetch</option>
-                         </select>
+                         <div class="flex gap-2 items-center">
+                             <select id="openai-model-selector" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" disabled>
+                                <option>Enter API Key and Fetch</option>
+                             </select>
+                             <button id="openai-params-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-md">AI Params</button>
+                         </div>
                      </div>
-                      <div id="ollama-config" class="config-group hidden-config space-y-2">
+                     <div id="ollama-config" class="config-group hidden-config space-y-2">
                          <label for="ollama-url-input" class="block text-sm font-medium text-gray-400">Server URL</label>
                          <div class="flex gap-2">
                              <input type="text" id="ollama-url-input" value="http://localhost:11434" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                              <button id="fetch-ollama-models-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 rounded-md">Fetch</button>
                          </div>
                          <label for="ollama-model-selector" class="block text-sm font-medium text-gray-400">Model Name</label>
-                         <select id="ollama-model-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" disabled>
-                            <option>Fetch models from server</option>
-                         </select>
+                         <div class="flex gap-2 items-center">
+                             <select id="ollama-model-selector" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" disabled>
+                                <option>Fetch models from server</option>
+                             </select>
+                             <button id="ollama-params-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-md">AI Params</button>
+                         </div>
+                     </div>
+                     <div id="ai-params-panel" class="hidden bg-gray-700 p-4 rounded-md space-y-3">
+                         <label class="flex items-center text-sm text-gray-300"><input type="checkbox" id="cached-inputs-toggle" class="mr-2">Use Cached Inputs (OpenAI only)<span class="ml-1 cursor-help" title="When enabled, repeated prompts may be billed at a cheaper cached rate." >?</span></label>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Temperature <span class="ml-1 cursor-help" title="Higher values = more random output; lower = more focused">?</span></label>
+                             <input type="range" id="temperature-slider" min="0" max="2" step="0.1" value="1" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Max Tokens <span class="ml-1 cursor-help" title="Higher values allow longer responses">?</span></label>
+                             <input type="range" id="max-tokens-slider" min="1" max="4096" step="1" value="150" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Top P <span class="ml-1 cursor-help" title="Lower values narrow the token selection, higher values broaden it">?</span></label>
+                             <input type="range" id="top-p-slider" min="0" max="1" step="0.01" value="1" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">N <span class="ml-1 cursor-help" title="Number of completions to generate per prompt">?</span></label>
+                             <input type="range" id="n-slider" min="1" max="5" step="1" value="1" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Stop Sequence <span class="ml-1 cursor-help" title="Generation stops when this sequence is found; 0=none, 1=newline">?</span></label>
+                             <input type="range" id="stop-slider" min="0" max="1" step="1" value="0" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Freq. Penalty <span class="ml-1 cursor-help" title="Higher values discourage repetition">?</span></label>
+                             <input type="range" id="freq-penalty-slider" min="0" max="2" step="0.1" value="0" class="w-full">
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-400">Pres. Penalty <span class="ml-1 cursor-help" title="Higher values encourage new topics">?</span></label>
+                             <input type="range" id="pres-penalty-slider" min="0" max="2" step="0.1" value="0" class="w-full">
+                         </div>
                      </div>
                  </div>
             </div>

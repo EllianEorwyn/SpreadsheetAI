@@ -42,6 +42,18 @@ document.addEventListener('DOMContentLoaded', () => {
         openaiApiKeyInput: document.getElementById('openai-api-key-input'),
         fetchOpenAIModelsBtn: document.getElementById('fetch-openai-models-btn'),
         openaiModelSelector: document.getElementById('openai-model-selector'),
+        openaiParamsBtn: document.getElementById('openai-params-btn'),
+        geminiParamsBtn: document.getElementById('gemini-params-btn'),
+        ollamaParamsBtn: document.getElementById('ollama-params-btn'),
+        aiParamsPanel: document.getElementById('ai-params-panel'),
+        cachedInputsToggle: document.getElementById('cached-inputs-toggle'),
+        temperatureSlider: document.getElementById('temperature-slider'),
+        maxTokensSlider: document.getElementById('max-tokens-slider'),
+        topPSlider: document.getElementById('top-p-slider'),
+        nSlider: document.getElementById('n-slider'),
+        stopSlider: document.getElementById('stop-slider'),
+        freqPenaltySlider: document.getElementById('freq-penalty-slider'),
+        presPenaltySlider: document.getElementById('pres-penalty-slider'),
         ollamaUrlInput: document.getElementById('ollama-url-input'),
         fetchOllamaModelsBtn: document.getElementById('fetch-ollama-models-btn'),
         ollamaModelSelector: document.getElementById('ollama-model-selector'),
@@ -125,7 +137,17 @@ document.addEventListener('DOMContentLoaded', () => {
         includeRowContext: true,
         validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false },
         currentPreset: null,
-        dashboardOverrides: {}
+        dashboardOverrides: {},
+        aiParams: {
+            cache: false,
+            temperature: 1,
+            maxTokens: 150,
+            topP: 1,
+            n: 1,
+            stop: 0,
+            freqPenalty: 0,
+            presPenalty: 0
+        }
     };
     
     const MODEL_PRICING = {
@@ -635,10 +657,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        const totalTokens = totalInputTokens + totalOutputTokens;
+        const completions = appState.aiParams.n || 1;
+        const totalTokens = totalInputTokens + (totalOutputTokens * completions);
         const modelName = getModelIdentifier();
         const pricing = MODEL_PRICING[modelName] || MODEL_PRICING['default_openai'];
-        const cost = ((totalInputTokens / 1_000_000) * pricing.input) + ((totalOutputTokens / 1_000_000) * pricing.output);
+        const inputRate = (provider === 'openai' && appState.aiParams.cache) ? pricing.cached : pricing.input;
+        const cost = ((totalInputTokens / 1_000_000) * inputRate) + (((totalOutputTokens * completions) / 1_000_000) * pricing.output);
 
         ui.costEstimate.textContent = `$${cost.toFixed(4)}`;
         ui.tokenEstimate.textContent = `~${totalTokens.toLocaleString()} tokens`;
@@ -865,10 +889,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const projectDesc = ui.projectDescriptionInput.value;
         const additional = ui.additionalContextInput.value;
         const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n---\n\n${userPrompt}`;
+        const params = appState.aiParams;
         const payload = {
             contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
             generationConfig: {
-                maxOutputTokens: parseInt(maxTokens, 10) || 150,
+                maxOutputTokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+                temperature: parseFloat(params.temperature),
+                topP: parseFloat(params.topP)
             }
         };
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -897,6 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!apiKey) throw new Error("OpenAI API Key is required.");
         if (!model) throw new Error("Please fetch and select an OpenAI model.");
         const apiUrl = `https://api.openai.com/v1/chat/completions`;
+        const params = appState.aiParams;
         const payload = {
             model: model,
             messages: [
@@ -905,8 +933,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 { role: "system", content: `Additional Context:\n${additional}` },
                 { role: "user", content: userPrompt }
             ],
-            max_tokens: parseInt(maxTokens, 10) || 150,
+            max_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+            temperature: parseFloat(params.temperature),
+            top_p: parseFloat(params.topP),
+            n: parseInt(params.n,10),
+            frequency_penalty: parseFloat(params.freqPenalty),
+            presence_penalty: parseFloat(params.presPenalty)
         };
+        if(params.stop === 1) payload.stop = ["\n"];
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
@@ -1425,6 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
             analysisTasks: appState.analysisTasks,
             includeRowContext: appState.includeRowContext,
             validationSettings: appState.validationSettings,
+            aiParams: appState.aiParams,
         };
 
         switch (profile.provider) {
@@ -1503,11 +1538,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateTaskColumnDropdowns();
                 }
 
+                if (profile.aiParams) {
+                    appState.aiParams = Object.assign(appState.aiParams, profile.aiParams);
+                    ui.cachedInputsToggle.checked = appState.aiParams.cache;
+                    ui.temperatureSlider.value = appState.aiParams.temperature;
+                    ui.maxTokensSlider.value = appState.aiParams.maxTokens;
+                    ui.topPSlider.value = appState.aiParams.topP;
+                    ui.nSlider.value = appState.aiParams.n;
+                    ui.stopSlider.value = appState.aiParams.stop;
+                    ui.freqPenaltySlider.value = appState.aiParams.freqPenalty;
+                    ui.presPenaltySlider.value = appState.aiParams.presPenalty;
+                }
+
                 // --- Apply analysis tasks ---
                 if (profile.analysisTasks && Array.isArray(profile.analysisTasks)) {
                     profile.analysisTasks.forEach(task => addAnalysisTask(task.type, task));
                 }
 
+                updateCostEstimate();
                 log('Profile loaded successfully.', 'SUCCESS');
 
             } catch (error) {
@@ -1546,6 +1594,19 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById(`${ui.providerSelector.value}-config`).classList.remove('hidden-config');
         updateCostEstimate();
     });
+
+    [ui.openaiParamsBtn, ui.geminiParamsBtn, ui.ollamaParamsBtn].forEach(btn => {
+        btn.addEventListener('click', () => ui.aiParamsPanel.classList.toggle('hidden'));
+    });
+
+    ui.cachedInputsToggle.addEventListener('change', e => { appState.aiParams.cache = e.target.checked; updateCostEstimate(); });
+    ui.temperatureSlider.addEventListener('input', e => { appState.aiParams.temperature = parseFloat(e.target.value); });
+    ui.maxTokensSlider.addEventListener('input', e => { appState.aiParams.maxTokens = parseInt(e.target.value,10); updateCostEstimate(); });
+    ui.topPSlider.addEventListener('input', e => { appState.aiParams.topP = parseFloat(e.target.value); });
+    ui.nSlider.addEventListener('input', e => { appState.aiParams.n = parseInt(e.target.value,10); });
+    ui.stopSlider.addEventListener('input', e => { appState.aiParams.stop = parseInt(e.target.value,10); });
+    ui.freqPenaltySlider.addEventListener('input', e => { appState.aiParams.freqPenalty = parseFloat(e.target.value); });
+    ui.presPenaltySlider.addEventListener('input', e => { appState.aiParams.presPenalty = parseFloat(e.target.value); });
     
     [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector].forEach(el => {
         el.addEventListener('input', updateCostEstimate);
