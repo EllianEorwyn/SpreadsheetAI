@@ -115,30 +115,65 @@
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Temperature <span class="ml-1 cursor-help" title="Higher values = more random output; lower = more focused">?</span></label>
                              <input type="range" id="temperature-slider" min="0" max="2" step="0.1" value="1" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>0</span>
+                                 <span id="temperature-value">1</span>
+                                 <span>2</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Max Tokens <span class="ml-1 cursor-help" title="Higher values allow longer responses">?</span></label>
                              <input type="range" id="max-tokens-slider" min="1" max="4096" step="1" value="150" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>1</span>
+                                 <span id="max-tokens-value">150</span>
+                                 <span>4096</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Top P <span class="ml-1 cursor-help" title="Lower values narrow the token selection, higher values broaden it">?</span></label>
                              <input type="range" id="top-p-slider" min="0" max="1" step="0.01" value="1" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>0</span>
+                                 <span id="top-p-value">1</span>
+                                 <span>1</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">N <span class="ml-1 cursor-help" title="Number of completions to generate per prompt">?</span></label>
                              <input type="range" id="n-slider" min="1" max="5" step="1" value="1" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>1</span>
+                                 <span id="n-value">1</span>
+                                 <span>5</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Stop Sequence <span class="ml-1 cursor-help" title="Generation stops when this sequence is found; 0=none, 1=newline">?</span></label>
                              <input type="range" id="stop-slider" min="0" max="1" step="1" value="0" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>0</span>
+                                 <span id="stop-value">0</span>
+                                 <span>1</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Freq. Penalty <span class="ml-1 cursor-help" title="Higher values discourage repetition">?</span></label>
                              <input type="range" id="freq-penalty-slider" min="0" max="2" step="0.1" value="0" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>0</span>
+                                 <span id="freq-penalty-value">0</span>
+                                 <span>2</span>
+                             </div>
                          </div>
                          <div>
                              <label class="block text-sm font-medium text-gray-400">Pres. Penalty <span class="ml-1 cursor-help" title="Higher values encourage new topics">?</span></label>
                              <input type="range" id="pres-penalty-slider" min="0" max="2" step="0.1" value="0" class="w-full">
+                             <div class="flex justify-between text-xs text-gray-400 px-1 mt-1">
+                                 <span>0</span>
+                                 <span id="pres-penalty-value">0</span>
+                                 <span>2</span>
+                             </div>
                          </div>
                      </div>
                  </div>
