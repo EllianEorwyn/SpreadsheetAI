@@ -1737,6 +1737,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function listOllamaModels(baseURL) {
+        try {
+            const r = await fetch(new URL('/v1/models', baseURL).href, { method: 'GET' });
+            if (r.ok) {
+                const j = await r.json();
+                if (Array.isArray(j.data)) {
+                    return j.data.map(m => ({ name: m.id }));
+                }
+            }
+        } catch { /* fall through to legacy */ }
+
+        const r2 = await fetch(new URL('/api/tags', baseURL).href, { method: 'GET' });
+        if (!r2.ok) throw new Error(`Server returned status ${r2.status}`);
+        const j2 = await r2.json();
+        return j2.models ?? [];
+    }
+
     ui.fetchOllamaModelsBtn.addEventListener('click', async () => {
         const url = ui.ollamaUrlInput.value;
         log('Fetching Ollama models...', 'API');
@@ -1744,11 +1761,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.ollamaModelSelector.disabled = true;
         ui.ollamaModelSelector.innerHTML = '<option>Fetching...</option>';
         try {
-            const apiUrl = new URL('/api/tags', url).href;
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error(`Server returned status ${response.status}`);
-            const result = await response.json();
-            const models = result.models.sort((a, b) => a.name.localeCompare(b.name));
+            const models = (await listOllamaModels(url)).sort((a, b) => a.name.localeCompare(b.name));
             appState.availableModels.ollama = models;
             populateModelSelector('ollama', models);
             log(`Successfully fetched ${models.length} local models.`, 'SUCCESS');
