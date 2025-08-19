@@ -61,6 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
         stopValue: document.getElementById('stop-value'),
         freqPenaltyValue: document.getElementById('freq-penalty-value'),
         presPenaltyValue: document.getElementById('pres-penalty-value'),
+        gpt5Options: document.getElementById('gpt5-extra-params'),
+        gpt5ReasoningSelect: document.getElementById('gpt5-reasoning'),
+        gpt5VerbositySelect: document.getElementById('gpt5-verbosity'),
+        ollamaOptions: document.getElementById('ollama-extra-params'),
+        ollamaReasoningToggle: document.getElementById('ollama-reasoning-toggle'),
         ollamaUrlInput: document.getElementById('ollama-url-input'),
         fetchOllamaModelsBtn: document.getElementById('fetch-ollama-models-btn'),
         ollamaModelSelector: document.getElementById('ollama-model-selector'),
@@ -153,7 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
             n: 1,
             stop: 0,
             freqPenalty: 0,
-            presPenalty: 0
+            presPenalty: 0,
+            reasoning: 'minimal',
+            verbosity: 'medium',
+            ollamaReasoning: false
         }
     };
     
@@ -930,42 +938,72 @@ document.addEventListener('DOMContentLoaded', () => {
         const additional = ui.additionalContextInput.value;
         if (!apiKey) throw new Error("OpenAI API Key is required.");
         if (!model) throw new Error("Please fetch and select an OpenAI model.");
-        const apiUrl = `https://api.openai.com/v1/chat/completions`;
         const params = appState.aiParams;
-        const payload = {
-            model: model,
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "system", content: `Project Description:\n${projectDesc}` },
-                { role: "system", content: `Additional Context:\n${additional}` },
-                { role: "user", content: userPrompt }
-            ],
-            max_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
-            temperature: parseFloat(params.temperature),
-            top_p: parseFloat(params.topP),
-            n: parseInt(params.n,10),
-            frequency_penalty: parseFloat(params.freqPenalty),
-            presence_penalty: parseFloat(params.presPenalty)
-        };
-        if(params.stop === 1) payload.stop = ["\n"];
-        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
-        const result = await response.json();
-        if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
-        if (result.choices?.[0]?.message.content) {
-            const text = result.choices[0].message.content;
-            const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`;
-            recordAuditEntry({
-                timestamp: new Date().toISOString(),
-                provider: 'openai',
+        const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`;
+
+        if (model.includes('gpt-5')) {
+            const apiUrl = 'https://api.openai.com/v1/responses';
+            const payload = {
                 model,
-                prompt: finalPrompt,
-                response: text,
-                inputTokens: estimateTokens(finalPrompt),
-                outputTokens: estimateTokens(text)
-            });
-            return { text };
+                input: finalPrompt,
+                max_completion_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+                temperature: parseFloat(params.temperature),
+                reasoning: { effort: params.reasoning },
+                text: { verbosity: params.verbosity }
+            };
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
+            const text = result.output_text || result.output?.[0]?.content?.[0]?.text?.value;
+            if (text) {
+                recordAuditEntry({
+                    timestamp: new Date().toISOString(),
+                    provider: 'openai',
+                    model,
+                    prompt: finalPrompt,
+                    response: text,
+                    inputTokens: estimateTokens(finalPrompt),
+                    outputTokens: estimateTokens(text)
+                });
+                return { text };
+            }
+            throw new Error("No content in OpenAI response.");
+        } else {
+            const apiUrl = `https://api.openai.com/v1/chat/completions`;
+            const payload = {
+                model: model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "system", content: `Project Description:\n${projectDesc}` },
+                    { role: "system", content: `Additional Context:\n${additional}` },
+                    { role: "user", content: userPrompt }
+                ],
+                max_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+                temperature: parseFloat(params.temperature),
+                top_p: parseFloat(params.topP),
+                n: parseInt(params.n,10),
+                frequency_penalty: parseFloat(params.freqPenalty),
+                presence_penalty: parseFloat(params.presPenalty)
+            };
+            if(params.stop === 1) payload.stop = ["\n"];
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(payload) });
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error ? result.error.message : `HTTP error! status: ${response.status}`);
+            if (result.choices?.[0]?.message.content) {
+                const text = result.choices[0].message.content;
+                recordAuditEntry({
+                    timestamp: new Date().toISOString(),
+                    provider: 'openai',
+                    model,
+                    prompt: finalPrompt,
+                    response: text,
+                    inputTokens: estimateTokens(finalPrompt),
+                    outputTokens: estimateTokens(text)
+                });
+                return { text };
+            }
+            throw new Error("No content in OpenAI response.");
         }
-        throw new Error("No content in OpenAI response.");
     }
     async function processWithOllama(userPrompt, systemPrompt, maxTokens) {
         const model = ui.ollamaModelSelector.value;
@@ -974,6 +1012,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiUrl = new URL('/api/generate', url).href;
         const projectDesc = ui.projectDescriptionInput.value;
         const additional = ui.additionalContextInput.value;
+        const params = appState.aiParams;
         const payload = {
             model: model,
             prompt: `Project Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`,
@@ -981,8 +1020,10 @@ document.addEventListener('DOMContentLoaded', () => {
             stream: false,
             options: {
                 num_predict: parseInt(maxTokens, 10) || 150,
+                temperature: parseFloat(params.temperature)
             }
         };
+        if (params.ollamaReasoning) payload.options.reasoning = true;
         const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const result = await response.json();
         if (!response.ok || result.error) throw new Error(result.error || `HTTP error! status: ${response.status}`);
@@ -1201,6 +1242,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (provider === 'ollama' && models.some(m => m.name.includes('llama3'))) selector.value = models.find(m => m.name.includes('llama3')).name;
         selector.disabled = false;
         updateCostEstimate();
+        updateProviderSpecificParams();
     }
     
     async function autoGenerateTask() {
@@ -1517,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ui.openaiApiKeyInput.value = modelConfig.apiKey || '';
                             if(modelConfig.apiKey && modelConfig.model) {
                                 await ui.fetchOpenAIModelsBtn.click();
-                                setTimeout(() => { ui.openaiModelSelector.value = modelConfig.model; updateCostEstimate(); }, 500);
+                                setTimeout(() => { ui.openaiModelSelector.value = modelConfig.model; updateCostEstimate(); updateProviderSpecificParams(); }, 500);
                             }
                             break;
                         case 'ollama':
@@ -1562,6 +1604,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     ui.freqPenaltyValue.textContent = appState.aiParams.freqPenalty;
                     ui.presPenaltySlider.value = appState.aiParams.presPenalty;
                     ui.presPenaltyValue.textContent = appState.aiParams.presPenalty;
+                    ui.gpt5ReasoningSelect.value = appState.aiParams.reasoning || 'minimal';
+                    ui.gpt5VerbositySelect.value = appState.aiParams.verbosity || 'medium';
+                    ui.ollamaReasoningToggle.checked = appState.aiParams.ollamaReasoning || false;
                 }
 
                 // --- Apply analysis tasks ---
@@ -1570,6 +1615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 updateCostEstimate();
+                updateProviderSpecificParams();
                 log('Profile loaded successfully.', 'SUCCESS');
 
             } catch (error) {
@@ -1603,11 +1649,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
+    function updateProviderSpecificParams() {
+        ui.gpt5Options.classList.add('hidden');
+        ui.ollamaOptions.classList.add('hidden');
+        if (ui.providerSelector.value === 'openai' && ui.openaiModelSelector.value.includes('gpt-5')) {
+            ui.gpt5Options.classList.remove('hidden');
+        }
+        if (ui.providerSelector.value === 'ollama') {
+            ui.ollamaOptions.classList.remove('hidden');
+        }
+    }
+
     ui.providerSelector.addEventListener('change', () => {
         document.querySelectorAll('.config-group').forEach(el => el.classList.add('hidden-config'));
         document.getElementById(`${ui.providerSelector.value}-config`).classList.remove('hidden-config');
         updateCostEstimate();
+        updateProviderSpecificParams();
     });
+
+    ui.openaiModelSelector.addEventListener('change', updateProviderSpecificParams);
 
     [ui.openaiParamsBtn, ui.geminiParamsBtn, ui.ollamaParamsBtn].forEach(btn => {
         btn.addEventListener('click', () => ui.aiParamsPanel.classList.toggle('hidden'));
@@ -1643,6 +1703,10 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.aiParams.presPenalty = parseFloat(e.target.value);
         ui.presPenaltyValue.textContent = e.target.value;
     });
+
+    ui.gpt5ReasoningSelect.addEventListener('change', e => { appState.aiParams.reasoning = e.target.value; });
+    ui.gpt5VerbositySelect.addEventListener('change', e => { appState.aiParams.verbosity = e.target.value; });
+    ui.ollamaReasoningToggle.addEventListener('change', e => { appState.aiParams.ollamaReasoning = e.target.checked; });
     
     [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector].forEach(el => {
         el.addEventListener('input', updateCostEstimate);
