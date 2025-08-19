@@ -69,6 +69,33 @@ An LLM-Enhanced Spreadsheet Classifier App that lets you upload a spreadsheet, d
 - Cost and token estimates updated live
 - Auto-fill models based on API key / local instance
 
+## 🛠️ Using Local Ollama Models
+
+Newer versions of Ollama expose an OpenAI-compatible model list at `/v1/models` while
+older releases use the legacy `/api/tags` route. The app now tries both endpoints
+automatically.
+
+If the browser console shows CORS errors (often a 403 on the preflight `OPTIONS` call),
+start Ollama with your front-end origin whitelisted:
+
+```
+export OLLAMA_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+# If accessing from Docker/WSL/LAN also bind the server:
+export OLLAMA_HOST=0.0.0.0:11434
+ollama serve
+```
+
+You can verify the server responds to both endpoints:
+
+```
+curl -i http://127.0.0.1:11434/v1/models
+curl -i http://127.0.0.1:11434/api/tags
+curl -i -X OPTIONS http://127.0.0.1:11434/v1/models \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: GET"
+```
+
+
 ### 💾 Profile Management
 - Save and load complete analysis profiles as JSON
 - Includes model config, system prompt, tasks, and validation settings
