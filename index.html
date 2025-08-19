@@ -175,6 +175,28 @@
                                  <span>2</span>
                              </div>
                          </div>
+                        <div id="gpt5-extra-params" class="hidden space-y-2">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400">Reasoning Effort</label>
+                                <select id="gpt5-reasoning" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2">
+                                    <option value="minimal" selected>Minimal</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400">Verbosity</label>
+                                <select id="gpt5-verbosity" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="ollama-extra-params" class="hidden">
+                            <label class="flex items-center text-sm text-gray-300"><input type="checkbox" id="ollama-reasoning-toggle" class="mr-2">Request Reasoning</label>
+                        </div>
                      </div>
                  </div>
             </div>
