@@ -1763,7 +1763,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     ui.fetchOllamaModelsBtn.addEventListener('click', async () => {
-        const url = ui.ollamaUrlInput.value;
+        let url = ui.ollamaUrlInput.value.trim();
+        if (!/^https?:\/\//i.test(url)) {
+            if (!url) {
+                log('Please enter a valid Ollama URL.', 'ERROR');
+                return;
+            }
+            url = `http://${url}`;
+            ui.ollamaUrlInput.value = url;
+            log('No scheme provided. Assuming http://', 'INFO');
+        }
         log('Fetching Ollama models...', 'API');
         ui.fetchOllamaModelsBtn.disabled = true;
         ui.ollamaModelSelector.disabled = true;
