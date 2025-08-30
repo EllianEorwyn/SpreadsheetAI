@@ -946,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 model,
                 input: finalPrompt,
-                max_completion_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+                max_output_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
                 temperature: parseFloat(params.temperature),
                 reasoning: { effort: params.reasoning },
                 text: { verbosity: params.verbosity }
