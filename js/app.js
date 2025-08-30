@@ -1739,16 +1739,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function listOllamaModels(baseURL) {
         try {
-            const r = await fetch(new URL('/v1/models', baseURL).href, { method: 'GET' });
+            const r = await fetch(new URL('/v1/models', baseURL).href, {
+                method: 'GET',
+                mode: 'cors'
+            });
             if (r.ok) {
                 const j = await r.json();
                 if (Array.isArray(j.data)) {
                     return j.data.map(m => ({ name: m.id }));
                 }
             }
-        } catch { /* fall through to legacy */ }
+        } catch (err) {
+            console.error('Error fetching Ollama models via /v1/models:', err);
+        }
 
-        const r2 = await fetch(new URL('/api/tags', baseURL).href, { method: 'GET' });
+        const r2 = await fetch(new URL('/api/tags', baseURL).href, {
+            method: 'GET',
+            mode: 'cors'
+        });
         if (!r2.ok) throw new Error(`Server returned status ${r2.status}`);
         const j2 = await r2.json();
         return j2.models ?? [];
@@ -1770,6 +1778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.ollamaModelSelector.innerHTML = '<option>Failed to fetch</option>';
         } finally {
             ui.fetchOllamaModelsBtn.disabled = false;
+            ui.ollamaModelSelector.disabled = false;
         }
     });
 
