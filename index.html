@@ -382,10 +382,10 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400">4. Add Context Columns (optional)</label>
-                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
-                    <option>Upload a file first</option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">Each selected column will be prefixed to the prompt with its current row value.</p>
+                <div class="context-columns-group bg-gray-700 border border-gray-600 rounded-md p-2 h-24 overflow-y-auto space-y-1 text-sm" data-context-container>
+                    <p class="context-columns-placeholder text-xs text-gray-500">Upload a file first</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Use the checkboxes to include the full history of those columns (including prior AI outputs) in the prompt.</p>
             </div>
             <div>
                <label class="block text-sm font-medium text-gray-400">5. Max Output Tokens</label>
@@ -420,10 +420,10 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400">2. Add Context Columns (optional)</label>
-                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
-                    <option>Upload a file first</option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">Include earlier outputs or reference columns to guide the comparison.</p>
+                <div class="context-columns-group bg-gray-700 border border-gray-600 rounded-md p-2 h-24 overflow-y-auto space-y-1 text-sm" data-context-container>
+                    <p class="context-columns-placeholder text-xs text-gray-500">Upload a file first</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Check any columns whose running history should guide the comparison.</p>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -480,10 +480,10 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400">3. Add Context Columns (optional)</label>
-                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
-                    <option>Upload a file first</option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">Surface important columns or prior task outputs before running your custom instructions.</p>
+                <div class="context-columns-group bg-gray-700 border border-gray-600 rounded-md p-2 h-24 overflow-y-auto space-y-1 text-sm" data-context-container>
+                    <p class="context-columns-placeholder text-xs text-gray-500">Upload a file first</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Surface important columns or prior task outputs—each checkbox includes the entire column history.</p>
             </div>
             <div>
                 <label class="flex items-center text-sm"><input type="checkbox" data-type="reliabilityCheck" class="task-input mr-2">Compare output with human-coded column</label>
@@ -530,10 +530,10 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400">3. Add Context Columns (optional)</label>
-                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
-                    <option>Upload a file first</option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">Use this to feed outputs from earlier auto-generated steps back into later tasks.</p>
+                <div class="context-columns-group bg-gray-700 border border-gray-600 rounded-md p-2 h-24 overflow-y-auto space-y-1 text-sm" data-context-container>
+                    <p class="context-columns-placeholder text-xs text-gray-500">Upload a file first</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Use this to feed outputs from earlier auto-generated steps back into later tasks without losing prior rows.</p>
             </div>
             <div>
                 <label class="flex items-center text-sm"><input type="checkbox" data-type="reliabilityCheck" class="task-input mr-2">Compare output with human-coded column</label>

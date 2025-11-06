@@ -658,13 +658,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return context;
     }
 
-    function buildPrompt(task, row) {
+    function getCellValue(row, column) {
+        if (!row) return '';
+        const value = row[column];
+        return value === undefined || value === null ? '' : value;
+    }
+
+    function buildPrompt(task, row, rowIndex = null, dataSet = appState.data) {
         let prompt = task.prompt;
 
         if (task.type === 'analyze') {
-            prompt = prompt.replace(/\{\{COLUMN\}\}/g, row[task.sourceColumn] || '');
+            prompt = prompt.replace(/\{\{COLUMN\}\}/g, getCellValue(row, task.sourceColumn));
         } else if (task.type === 'compare') {
-            const columnsData = task.sourceColumns.map(sc => `Column '${sc}': ${row[sc] || ''}`).join('\n');
+            const columnsData = task.sourceColumns.map(sc => `Column '${sc}': ${getCellValue(row, sc)}`).join('\n');
             prompt = prompt.replace(/\{\{COLUMNS_DATA\}\}/g, columnsData);
         }
 
@@ -672,14 +678,35 @@ document.addEventListener('DOMContentLoaded', () => {
         columns.forEach(header => {
             const escapedHeader = header.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regex = new RegExp(`\\{\\{${escapedHeader}\\}\\}`, 'g');
-            prompt = prompt.replace(regex, row[header] || '');
+            prompt = prompt.replace(regex, getCellValue(row, header));
         });
 
         const selectedContext = Array.isArray(task.contextColumns) ? task.contextColumns.filter(Boolean) : [];
         let contextBlock = '';
         if (selectedContext.length) {
-            const lines = selectedContext.map(col => `${col}: ${(row && row[col]) ?? ''}`);
-            contextBlock = `### SELECTED CONTEXT COLUMNS ###\n${lines.join('\n')}\n### END SELECTED CONTEXT ###\n\n`;
+            const rowsData = Array.isArray(dataSet) ? dataSet : [];
+            const resolvedIndex = (typeof rowIndex === 'number' && rowIndex >= 0)
+                ? rowIndex
+                : (row ? rowsData.indexOf(row) : -1);
+            const contextLines = ['### SELECTED CONTEXT COLUMNS ###'];
+
+            selectedContext.forEach(col => {
+                contextLines.push(`[Column: ${col}]`);
+                if (resolvedIndex > 0 && rowsData.length) {
+                    const limit = Math.min(resolvedIndex, rowsData.length);
+                    for (let i = 0; i < limit; i++) {
+                        contextLines.push(`Row ${i + 1}: ${getCellValue(rowsData[i], col)}`);
+                    }
+                }
+
+                const currentLabel = resolvedIndex >= 0 ? `Row ${resolvedIndex + 1}` : 'Current Row';
+                contextLines.push(`${currentLabel}: ${getCellValue(row, col)}`);
+                contextLines.push('');
+            });
+
+            if (contextLines[contextLines.length - 1] === '') contextLines.pop();
+            contextLines.push('### END SELECTED CONTEXT ###', '');
+            contextBlock = contextLines.join('\n');
         }
 
         const rowContextBlock = appState.includeRowContext ? buildRowContext(row) + '\n\n' : '';
@@ -707,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         appState.analysisTasks.forEach(task => {
             if (task.prompt && firstRow) {
-                const userPrompt = buildPrompt(task, firstRow);
+                const userPrompt = buildPrompt(task, firstRow, 0, appState.data);
                 totalInputTokens += (estimateTokens(userPrompt) + systemPromptTokens) * appState.data.length;
                 totalOutputTokens += (parseInt(task.maxTokens, 10) || 150) * appState.data.length;
             }
@@ -906,7 +933,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const row = appState.data[idx];
                 for (const task of appState.analysisTasks) {
                     const original = row[task.outputColumn] || '';
-                    const prompt = 'Please ' + buildPrompt(task, row);
+                    const prompt = 'Please ' + buildPrompt(task, row, idx, appState.data);
                     try {
                         const result = await processWithApi(prompt, task.maxTokens);
                         diffTotal += Math.abs(estimateTokens(result.text) - estimateTokens(original));
@@ -1322,28 +1349,46 @@ document.addEventListener('DOMContentLoaded', () => {
             dropdown.value = current;
         });
 
-        document.querySelectorAll('.task-input[data-type="contextColumns"]').forEach(select => {
-            const taskCard = select.closest('.task-card');
+        document.querySelectorAll('.context-columns-group').forEach(container => {
+            const taskCard = container.closest('.task-card');
             const taskId = taskCard ? taskCard.dataset.taskId : null;
             const task = taskId ? appState.analysisTasks.find(t => t.id === taskId) : null;
             const selectedValues = Array.isArray(task?.contextColumns) ? task.contextColumns.filter(Boolean) : [];
             const uniqueColumns = Array.from(new Set([...(availableColumns || []), ...selectedValues]));
-            const hadOptions = select.options.length > 0;
-            select.innerHTML = '';
+
+            container.innerHTML = '';
+
             if (uniqueColumns.length === 0) {
-                select.add(new Option('Upload a file first', ''));
-                select.disabled = true;
-            } else {
-                uniqueColumns.forEach(col => {
-                    const option = new Option(col, col);
-                    option.selected = selectedValues.includes(col);
-                    select.add(option);
-                });
-                select.disabled = false;
+                const placeholder = document.createElement('p');
+                placeholder.className = 'context-columns-placeholder text-xs text-gray-500';
+                placeholder.textContent = 'Upload a file first';
+                container.appendChild(placeholder);
+                container.classList.add('pointer-events-none', 'opacity-50');
+                return;
             }
-            if (!hadOptions && select.multiple && !select.size) {
-                select.size = Math.min(Math.max(uniqueColumns.length, 4), 8);
-            }
+
+            container.classList.remove('pointer-events-none', 'opacity-50');
+
+            uniqueColumns.forEach(col => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center gap-2 text-xs text-gray-200';
+                label.title = col;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = col;
+                checkbox.dataset.type = 'contextColumns';
+                checkbox.className = 'h-4 w-4 text-blue-500 rounded border-gray-500 bg-gray-800';
+                checkbox.checked = selectedValues.includes(col);
+
+                const span = document.createElement('span');
+                span.className = 'truncate';
+                span.textContent = col;
+
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                container.appendChild(label);
+            });
         });
 
         if (ui.consistencyColumns) {
@@ -1595,7 +1640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { task, currentIndex } = appState.testMode;
         if (!task || !appState.data[currentIndex]) return;
         const row = appState.data[currentIndex];
-        const prompt = buildPrompt(task, row);
+        const prompt = buildPrompt(task, row, currentIndex, appState.data);
         
         let rowDataText;
         if (task.type === 'analyze') {
@@ -1620,7 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!task || !appState.data[currentIndex]) return;
 
         const row = appState.data[currentIndex];
-        const prompt = buildPrompt(task, row);
+        const prompt = buildPrompt(task, row, currentIndex, appState.data);
 
         ui.testModeOutput.textContent = 'Processing...';
         try {
@@ -2026,7 +2071,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if(taskCard && dataType) {
             let val;
             if (dataType === 'contextColumns') {
-                val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+                if (e.target.tagName === 'SELECT') {
+                    val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+                } else {
+                    const container = e.target.closest('.context-columns-group') || taskCard.querySelector('.context-columns-group');
+                    val = container ? Array.from(container.querySelectorAll('input[type="checkbox"][data-type="contextColumns"]:checked')).map(cb => cb.value).filter(Boolean) : [];
+                }
             } else if (e.target.type === 'checkbox') {
                 val = e.target.checked;
             } else {
@@ -2051,7 +2101,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if(taskCard && dataType) {
             let val;
             if (dataType === 'contextColumns') {
-                val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+                if (e.target.tagName === 'SELECT') {
+                    val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+                } else {
+                    const container = e.target.closest('.context-columns-group') || taskCard.querySelector('.context-columns-group');
+                    val = container ? Array.from(container.querySelectorAll('input[type="checkbox"][data-type="contextColumns"]:checked')).map(cb => cb.value).filter(Boolean) : [];
+                }
             } else if (e.target.type === 'checkbox') {
                 val = e.target.checked;
             } else {
@@ -2107,7 +2162,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (let i = 0; i < processedData.length; i++) {
                 const row = processedData[i];
-                const prompt = buildPrompt(task, row);
+                const prompt = buildPrompt(task, row, i, processedData);
                 try {
                     const result = await processWithApi(prompt, task.maxTokens);
                     row[task.outputColumn] = result.text.trim();
