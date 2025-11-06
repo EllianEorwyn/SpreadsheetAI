@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         providerSelector: document.getElementById('provider-selector'),
         geminiConfig: document.getElementById('gemini-config'),
         openaiConfig: document.getElementById('openai-config'),
+        lmstudioConfig: document.getElementById('lmstudio-config'),
         ollamaConfig: document.getElementById('ollama-config'),
         geminiApiKeyInput: document.getElementById('gemini-api-key-input'),
         geminiModelSelector: document.getElementById('gemini-model-selector'),
@@ -43,6 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchOpenAIModelsBtn: document.getElementById('fetch-openai-models-btn'),
         openaiModelSelector: document.getElementById('openai-model-selector'),
         openaiParamsBtn: document.getElementById('openai-params-btn'),
+        lmstudioUrlInput: document.getElementById('lmstudio-url-input'),
+        fetchLmstudioModelsBtn: document.getElementById('fetch-lmstudio-models-btn'),
+        lmstudioModelSelector: document.getElementById('lmstudio-model-selector'),
+        lmstudioParamsBtn: document.getElementById('lmstudio-params-btn'),
         geminiParamsBtn: document.getElementById('gemini-params-btn'),
         ollamaParamsBtn: document.getElementById('ollama-params-btn'),
         aiParamsPanel: document.getElementById('ai-params-panel'),
@@ -144,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             aiParams: {}
         },
         analysisTasks: [],
-        availableModels: { openai: [], ollama: [] },
+        availableModels: { openai: [], ollama: [], lmstudio: [] },
         testMode: { isActive: false, task: null, currentIndex: 0 },
         includeRowContext: true,
         validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false },
@@ -610,6 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switch(provider) {
             case 'gemini': return ui.geminiModelSelector.value;
             case 'openai': return ui.openaiModelSelector.value;
+            case 'lmstudio': return ui.lmstudioModelSelector.value;
             case 'ollama': return ui.ollamaModelSelector.value;
             default: return 'unknown';
         }
@@ -653,9 +659,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const provider = ui.providerSelector.value;
-        if (provider === 'ollama') {
+        if (provider === 'ollama' || provider === 'lmstudio') {
             ui.costEstimate.textContent = "$0.00";
-            ui.tokenEstimate.textContent = "Processing is local";
+            ui.tokenEstimate.textContent = provider === 'lmstudio' ? "LM Studio handles requests locally" : "Processing is local";
             return;
         }
 
@@ -890,6 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
             switch (provider) {
                 case 'gemini': return await processWithGemini(prompt, systemPrompt, maxTokens);
                 case 'openai': return await processWithOpenAI(prompt, systemPrompt, maxTokens);
+                case 'lmstudio': return await processWithLmStudio(prompt, systemPrompt, maxTokens);
                 case 'ollama': return await processWithOllama(prompt, systemPrompt, maxTokens);
                 default: throw new Error(`Unknown provider: ${provider}`);
             }
@@ -1004,6 +1011,54 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             throw new Error("No content in OpenAI response.");
         }
+    }
+    async function processWithLmStudio(userPrompt, systemPrompt, maxTokens) {
+        const model = ui.lmstudioModelSelector.value;
+        let baseUrl = ui.lmstudioUrlInput.value.trim();
+        if (!model) throw new Error("Please fetch and select an LM Studio model.");
+        if (!baseUrl) throw new Error("Please enter the LM Studio server URL.");
+        if (!/^https?:\/\//i.test(baseUrl)) {
+            baseUrl = `http://${baseUrl}`;
+            ui.lmstudioUrlInput.value = baseUrl;
+        }
+        const apiUrl = new URL('/v1/chat/completions', baseUrl).href;
+        const projectDesc = ui.projectDescriptionInput.value;
+        const additional = ui.additionalContextInput.value;
+        const params = appState.aiParams;
+        const payload = {
+            model,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "system", content: `Project Description:\n${projectDesc}` },
+                { role: "system", content: `Additional Context:\n${additional}` },
+                { role: "user", content: userPrompt }
+            ],
+            max_tokens: parseInt(maxTokens, 10) || parseInt(params.maxTokens,10) || 150,
+            temperature: parseFloat(params.temperature),
+            top_p: parseFloat(params.topP),
+            n: parseInt(params.n,10),
+            frequency_penalty: parseFloat(params.freqPenalty),
+            presence_penalty: parseFloat(params.presPenalty)
+        };
+        if (params.stop === 1) payload.stop = ["\n"];
+        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const result = await response.json();
+        if (!response.ok || result.error) throw new Error(result.error ? (result.error.message || result.error) : `HTTP error! status: ${response.status}`);
+        const text = result.choices?.[0]?.message?.content || result.choices?.[0]?.text || result.output_text;
+        if (text) {
+            const finalPrompt = `${systemPrompt}\n\nProject Description:\n${projectDesc}\n\nAdditional Context:\n${additional}\n\n${userPrompt}`;
+            recordAuditEntry({
+                timestamp: new Date().toISOString(),
+                provider: 'lmstudio',
+                model,
+                prompt: finalPrompt,
+                response: text,
+                inputTokens: estimateTokens(finalPrompt),
+                outputTokens: estimateTokens(text)
+            });
+            return { text };
+        }
+        throw new Error("No content in LM Studio response.");
     }
     async function processWithOllama(userPrompt, systemPrompt, maxTokens) {
         const model = ui.ollamaModelSelector.value;
@@ -1231,15 +1286,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function populateModelSelector(provider, models) {
-        let selector = provider === 'openai' ? ui.openaiModelSelector : ui.ollamaModelSelector;
+        const selectors = {
+            openai: ui.openaiModelSelector,
+            ollama: ui.ollamaModelSelector,
+            lmstudio: ui.lmstudioModelSelector
+        };
+        const selector = selectors[provider];
+        if (!selector) return;
         selector.innerHTML = '';
         if (models.length === 0) { selector.add(new Option('No models found', '')); selector.disabled = true; return; }
         models.forEach(model => {
-            const modelId = provider === 'openai' ? model.id : model.name;
+            const modelId = model.id || model.name || model;
             selector.add(new Option(modelId, modelId));
         });
         if (provider === 'openai' && models.some(m => m.id === 'gpt-4o-mini')) selector.value = 'gpt-4o-mini';
         else if (provider === 'ollama' && models.some(m => m.name.includes('llama3'))) selector.value = models.find(m => m.name.includes('llama3')).name;
+        else if (provider === 'lmstudio' && models.length > 0) selector.value = models[0].id || models[0].name;
         selector.disabled = false;
         updateCostEstimate();
         updateProviderSpecificParams();
@@ -1517,6 +1579,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 profile.modelConfig.apiKey = ui.openaiApiKeyInput.value;
                 if(profile.modelConfig.apiKey) log('WARNING: Saving API key to a file is a security risk. Handle with care.', 'ERROR');
                 break;
+            case 'lmstudio':
+                profile.modelConfig.model = ui.lmstudioModelSelector.value;
+                profile.modelConfig.url = ui.lmstudioUrlInput.value;
+                break;
             case 'ollama':
                 profile.modelConfig.model = ui.ollamaModelSelector.value;
                 profile.modelConfig.url = ui.ollamaUrlInput.value;
@@ -1560,6 +1626,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             if(modelConfig.apiKey && modelConfig.model) {
                                 await ui.fetchOpenAIModelsBtn.click();
                                 setTimeout(() => { ui.openaiModelSelector.value = modelConfig.model; updateCostEstimate(); updateProviderSpecificParams(); }, 500);
+                            }
+                            break;
+                        case 'lmstudio':
+                            ui.lmstudioUrlInput.value = modelConfig.url || 'http://localhost:1234';
+                            if (modelConfig.model) {
+                                await ui.fetchLmstudioModelsBtn.click();
+                                setTimeout(() => { ui.lmstudioModelSelector.value = modelConfig.model; updateCostEstimate(); }, 500);
                             }
                             break;
                         case 'ollama':
@@ -1669,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.openaiModelSelector.addEventListener('change', updateProviderSpecificParams);
 
-    [ui.openaiParamsBtn, ui.geminiParamsBtn, ui.ollamaParamsBtn].forEach(btn => {
+    [ui.openaiParamsBtn, ui.geminiParamsBtn, ui.ollamaParamsBtn, ui.lmstudioParamsBtn].forEach(btn => {
         btn.addEventListener('click', () => ui.aiParamsPanel.classList.toggle('hidden'));
     });
 
@@ -1708,7 +1781,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.gpt5VerbositySelect.addEventListener('change', e => { appState.aiParams.verbosity = e.target.value; });
     ui.ollamaReasoningToggle.addEventListener('change', e => { appState.aiParams.ollamaReasoning = e.target.checked; });
     
-    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector].forEach(el => {
+    [ui.geminiModelSelector, ui.openaiModelSelector, ui.ollamaModelSelector, ui.lmstudioModelSelector].forEach(el => {
         el.addEventListener('input', updateCostEstimate);
         el.addEventListener('change', updateCostEstimate);
     });
@@ -1737,6 +1810,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function listLmStudioModels(baseURL) {
+        const response = await fetch(new URL('/v1/models', baseURL).href, { method: 'GET' });
+        if (!response.ok) {
+            throw new Error(`Server returned status ${response.status}`);
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload.data)) {
+            throw new Error('Unexpected LM Studio response.');
+        }
+        return payload.data.map(model => ({ id: model.id || model.name || model.slug || '' })).filter(m => m.id);
+    }
+
     async function listOllamaModels(baseURL) {
         try {
             const r = await fetch(new URL('/v1/models', baseURL).href, {
@@ -1761,6 +1846,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const j2 = await r2.json();
         return j2.models ?? [];
     }
+
+    ui.fetchLmstudioModelsBtn.addEventListener('click', async () => {
+        let url = ui.lmstudioUrlInput.value.trim();
+        if (!url) {
+            log('Please enter a valid LM Studio URL.', 'ERROR');
+            return;
+        }
+        if (!/^https?:\/\//i.test(url)) {
+            url = `http://${url}`;
+            ui.lmstudioUrlInput.value = url;
+            log('No scheme provided. Assuming http://', 'INFO');
+        }
+        log('Fetching LM Studio models...', 'API');
+        ui.fetchLmstudioModelsBtn.disabled = true;
+        ui.lmstudioModelSelector.disabled = true;
+        ui.lmstudioModelSelector.innerHTML = '<option>Fetching...</option>';
+        try {
+            const models = (await listLmStudioModels(url)).sort((a, b) => a.id.localeCompare(b.id));
+            appState.availableModels.lmstudio = models;
+            populateModelSelector('lmstudio', models);
+            log(`Successfully fetched ${models.length} LM Studio models.`, 'SUCCESS');
+        } catch (error) {
+            log(`Failed to fetch LM Studio models. ${error.message}`, 'ERROR');
+            ui.lmstudioModelSelector.innerHTML = '<option>Failed to fetch</option>';
+        } finally {
+            ui.fetchLmstudioModelsBtn.disabled = false;
+            ui.lmstudioModelSelector.disabled = false;
+        }
+    });
 
     ui.fetchOllamaModelsBtn.addEventListener('click', async () => {
         let url = ui.ollamaUrlInput.value.trim();
