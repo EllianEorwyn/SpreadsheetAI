@@ -221,6 +221,18 @@
                 <h2 class="font-bold mb-2 text-white">4. System Prompt</h2>
                 <textarea id="system-prompt-input" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">You are an AI assistant whose sole task is to process spreadsheet rows exactly as the user’s analysis tasks specify. Output only the requested content in the exact format required—no greetings, acknowledgments, or extra commentary.</textarea>
                 <label class="flex items-center text-sm mt-2"><input type="checkbox" id="include-row-context-toggle" class="mr-2" checked>Include full row context in prompt</label>
+
+                <hr class="my-4 border-gray-700">
+                <div>
+                    <h3 class="font-semibold text-white text-sm">Output Examples (optional)</h3>
+                    <p class="text-xs text-gray-500 mb-2">Designate top rows that already contain completed outputs. The LLM will treat them as format examples and skip generating new results for those rows.</p>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Number of example rows</label>
+                    <input type="number" id="example-row-count" min="0" value="0" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <label class="block text-sm font-medium text-gray-400 mt-3 mb-1">Columns to include in examples</label>
+                    <select id="example-columns" multiple class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-32" disabled></select>
+                    <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple columns.</p>
+                    <p id="example-rows-summary" class="text-xs text-gray-500 mt-2">Upload a spreadsheet to enable output examples.</p>
+                </div>
             </div>
 
             <div class="bg-gray-800 p-4 rounded-lg shadow-md">
