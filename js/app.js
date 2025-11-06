@@ -657,7 +657,15 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt = prompt.replace(regex, row[header] || '');
         });
 
-        return `${appState.includeRowContext ? buildRowContext(row) + '\n\n' : ''}${prompt}`;
+        const selectedContext = Array.isArray(task.contextColumns) ? task.contextColumns.filter(Boolean) : [];
+        let contextBlock = '';
+        if (selectedContext.length) {
+            const lines = selectedContext.map(col => `${col}: ${(row && row[col]) ?? ''}`);
+            contextBlock = `### SELECTED CONTEXT COLUMNS ###\n${lines.join('\n')}\n### END SELECTED CONTEXT ###\n\n`;
+        }
+
+        const rowContextBlock = appState.includeRowContext ? buildRowContext(row) + '\n\n' : '';
+        return `${rowContextBlock}${contextBlock}${prompt}`;
     }
 
     const updateCostEstimate = () => {
@@ -1114,18 +1122,22 @@ document.addEventListener('DOMContentLoaded', () => {
         let newTask, template;
 
         if (type === 'analyze') {
-            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'analyze', sourceColumn: '', outputColumn: `analysis_${taskIndex + 1}`, prompt: '', contextColumns: [], maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.analyzeTaskTemplate;
         } else if (type === 'compare') {
-            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'compare', sourceColumns: [], outputColumn: `comparison_${taskIndex + 1}`, prompt: '', contextColumns: [], maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.compareTaskTemplate;
         } else if (type === 'custom') {
-            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
+            newTask = Object.assign({ id: taskId, type: 'custom', outputColumn: `custom_${taskIndex + 1}`, prompt: '', contextColumns: [], maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.customTaskTemplate;
         } else if (type === "auto") {
-            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
+            newTask = Object.assign({ id: taskId, type: "auto", outputColumn: `auto_${taskIndex + 1}`, prompt: '', contextColumns: [], maxTokens: 150, reliabilityCheck: false, reliabilityColumn: '', reliabilityMethod: 'jaccard' }, taskData);
             template = ui.autoTaskTemplate;
         } else return;
+
+        if (!Array.isArray(newTask.contextColumns)) {
+            newTask.contextColumns = newTask.contextColumns ? [newTask.contextColumns].filter(Boolean) : [];
+        }
 
         appState.analysisTasks.push(newTask);
 
@@ -1221,9 +1233,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!task) return;
         if (field === 'sourceColumn' && task.type === 'compare') {
             task.sourceColumns[index] = value;
+        } else if (field === 'contextColumns') {
+            task.contextColumns = Array.isArray(value) ? Array.from(new Set(value.filter(Boolean))) : [];
         } else {
             task[field] = value;
         }
+        if (field === 'outputColumn') updateTaskColumnDropdowns();
         updateCostEstimate();
     }
 
@@ -1287,6 +1302,30 @@ document.addEventListener('DOMContentLoaded', () => {
             dropdown.add(new Option('Basic Alpha', 'binary'));
             dropdown.add(new Option('Alpha Weighted (MASI)', 'masi'));
             dropdown.value = current;
+        });
+
+        document.querySelectorAll('.task-input[data-type="contextColumns"]').forEach(select => {
+            const taskCard = select.closest('.task-card');
+            const taskId = taskCard ? taskCard.dataset.taskId : null;
+            const task = taskId ? appState.analysisTasks.find(t => t.id === taskId) : null;
+            const selectedValues = Array.isArray(task?.contextColumns) ? task.contextColumns.filter(Boolean) : [];
+            const uniqueColumns = Array.from(new Set([...(availableColumns || []), ...selectedValues]));
+            const hadOptions = select.options.length > 0;
+            select.innerHTML = '';
+            if (uniqueColumns.length === 0) {
+                select.add(new Option('Upload a file first', ''));
+                select.disabled = true;
+            } else {
+                uniqueColumns.forEach(col => {
+                    const option = new Option(col, col);
+                    option.selected = selectedValues.includes(col);
+                    select.add(option);
+                });
+                select.disabled = false;
+            }
+            if (!hadOptions && select.multiple && !select.size) {
+                select.size = Math.min(Math.max(uniqueColumns.length, 4), 8);
+            }
         });
 
         if (ui.consistencyColumns) {
@@ -1967,7 +2006,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskCard = e.target.closest('.task-card');
         const dataType = e.target.dataset.type;
         if(taskCard && dataType) {
-            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            let val;
+            if (dataType === 'contextColumns') {
+                val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+            } else if (e.target.type === 'checkbox') {
+                val = e.target.checked;
+            } else {
+                val = e.target.value;
+            }
             updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
             if(e.target.dataset.type === 'reliabilityCheck') {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
@@ -1985,7 +2031,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskCard = e.target.closest('.task-card');
         const dataType = e.target.dataset.type;
         if(taskCard && dataType) {
-            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            let val;
+            if (dataType === 'contextColumns') {
+                val = Array.from(e.target.selectedOptions || []).map(opt => opt.value).filter(Boolean);
+            } else if (e.target.type === 'checkbox') {
+                val = e.target.checked;
+            } else {
+                val = e.target.value;
+            }
             updateTaskState(taskCard.dataset.taskId, dataType, val, e.target.dataset.index ? parseInt(e.target.dataset.index) : null);
             if(e.target.dataset.type === 'reliabilityCheck') {
                 const sel = taskCard.querySelector('select[data-type="reliabilityColumn"]');
@@ -2031,7 +2084,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalItemsToProcess = appState.data.length * appState.analysisTasks.length;
 
         for (const task of appState.analysisTasks) {
-            appState.runLog.entries.push({ task: task.outputColumn, row_context_included: appState.includeRowContext, timestamp: new Date().toISOString() });
+            appState.runLog.entries.push({ task: task.outputColumn, row_context_included: appState.includeRowContext, context_columns: Array.isArray(task.contextColumns) ? [...task.contextColumns] : [], timestamp: new Date().toISOString() });
 
             for (let i = 0; i < processedData.length; i++) {
                 const row = processedData[i];

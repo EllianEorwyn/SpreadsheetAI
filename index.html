@@ -381,7 +381,14 @@
                 <p class="text-xs text-gray-500 mt-1">Variable `{{COLUMN}}` is replaced by the source column's value.<br>You can also reference any other column with `{{Column Name}}`.</p>
             </div>
             <div>
-               <label class="block text-sm font-medium text-gray-400">4. Max Output Tokens</label>
+                <label class="block text-sm font-medium text-gray-400">4. Add Context Columns (optional)</label>
+                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
+                    <option>Upload a file first</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Each selected column will be prefixed to the prompt with its current row value.</p>
+            </div>
+            <div>
+               <label class="block text-sm font-medium text-gray-400">5. Max Output Tokens</label>
                <input type="number" data-type="maxTokens" value="150" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
             </div>
             <div>
@@ -411,9 +418,16 @@
                 <div class="source-columns-container space-y-2"></div>
                 <button class="add-source-column-btn mt-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded-md">Add Column</button>
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400">2. Add Context Columns (optional)</label>
+                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
+                    <option>Upload a file first</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Include earlier outputs or reference columns to guide the comparison.</p>
+            </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400">2. Save Result To</label>
+                    <label class="block text-sm font-medium text-gray-400">3. Save Result To</label>
                     <input type="text" data-type="outputColumn" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="e.g., comparison_result">
                 </div>
                 <div>
@@ -434,7 +448,7 @@
             </div>
             <div>
                 <div class="flex justify-between items-center">
-                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <label class="block text-sm font-medium text-gray-400">5. Using These Instructions</label>
                     <div class="flex items-center">
                         <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
                         <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
@@ -465,6 +479,13 @@
                 </div>
             </div>
             <div>
+                <label class="block text-sm font-medium text-gray-400">3. Add Context Columns (optional)</label>
+                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
+                    <option>Upload a file first</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Surface important columns or prior task outputs before running your custom instructions.</p>
+            </div>
+            <div>
                 <label class="flex items-center text-sm"><input type="checkbox" data-type="reliabilityCheck" class="task-input mr-2">Compare output with human-coded column</label>
                 <select data-type="reliabilityColumn" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" disabled>
                     <option>Select column...</option>
@@ -477,7 +498,7 @@
             </div>
             <div>
                 <div class="flex justify-between items-center">
-                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <label class="block text-sm font-medium text-gray-400">4. Using These Instructions</label>
                     <div class="flex items-center">
                         <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
                         <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
@@ -508,6 +529,13 @@
                 </div>
             </div>
             <div>
+                <label class="block text-sm font-medium text-gray-400">3. Add Context Columns (optional)</label>
+                <select data-type="contextColumns" multiple size="5" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none h-24" disabled>
+                    <option>Upload a file first</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Use this to feed outputs from earlier auto-generated steps back into later tasks.</p>
+            </div>
+            <div>
                 <label class="flex items-center text-sm"><input type="checkbox" data-type="reliabilityCheck" class="task-input mr-2">Compare output with human-coded column</label>
                 <select data-type="reliabilityColumn" class="task-input w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1" disabled>
                     <option>Select column...</option>
@@ -520,7 +548,7 @@
             </div>
             <div>
                 <div class="flex justify-between items-center">
-                    <label class="block text-sm font-medium text-gray-400">3. Using These Instructions</label>
+                    <label class="block text-sm font-medium text-gray-400">4. Using These Instructions</label>
                     <div class="flex items-center">
                         <span class="guess-error text-red-400 text-xs mr-2 hidden">Couldn’t fetch suggestion—try again.</span>
                         <button class="guess-task-btn text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded-md">Guess</button>
