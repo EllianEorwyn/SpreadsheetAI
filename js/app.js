@@ -119,6 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmPresetBtn: document.getElementById('confirm-preset-btn'),
         cancelPresetBtn: document.getElementById('cancel-preset-btn'),
         includeRowContextToggle: document.getElementById('include-row-context-toggle'),
+        exampleRowCountInput: document.getElementById('example-row-count'),
+        exampleColumnsSelect: document.getElementById('example-columns'),
+        exampleRowsSummary: document.getElementById('example-rows-summary'),
         checkMissingOutputs: document.getElementById('check-missing-outputs'),
         promptStability: document.getElementById('prompt-stability'),
         consistencyCheck: document.getElementById('consistency-check'),
@@ -152,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         availableModels: { openai: [], ollama: [], lmstudio: [] },
         testMode: { isActive: false, task: null, currentIndex: 0 },
         includeRowContext: true,
+        exampleSettings: { rowCount: 0, columns: [] },
         validationSettings: { consistencyCheck: false, consistencyColumns: [], missingCheck: false, faceValidity: false, promptStability: false },
         currentPreset: null,
         dashboardOverrides: {},
@@ -316,9 +320,14 @@ document.addEventListener('DOMContentLoaded', () => {
         thead.appendChild(tr);
         table.appendChild(thead);
         const tbody = document.createElement('tbody');
-        appState.data.slice(0, 100).forEach(row => {
+        const exampleRowCount = getEffectiveExampleRowCount();
+        appState.data.slice(0, 100).forEach((row, rowIdx) => {
             tr = document.createElement('tr');
-            tr.className = 'bg-gray-800 border-b border-gray-700';
+            const isExampleRow = rowIdx < exampleRowCount;
+            tr.className = isExampleRow ? 'bg-yellow-900 border-b border-yellow-700' : 'bg-gray-800 border-b border-gray-700';
+            if (isExampleRow) {
+                tr.setAttribute('title', 'Output example row');
+            }
             appState.headers.forEach(header => {
                 const td = document.createElement('td');
                 td.className = 'px-4 py-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs';
@@ -644,6 +653,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return Array.from(new Set([...(appState.headers || []), ...rowKeys]));
     }
 
+    function getEffectiveExampleRowCount(dataSet = appState.data) {
+        const requested = parseInt(appState.exampleSettings?.rowCount, 10) || 0;
+        const rows = Array.isArray(dataSet) ? dataSet : [];
+        return Math.max(0, Math.min(requested, rows.length));
+    }
+
     function buildRowContext(row) {
         const columns = getColumnsForRow(row);
         const rowLines = columns.map(h => `${h}: ${row[h] || ''}`);
@@ -664,8 +679,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return value === undefined || value === null ? '' : value;
     }
 
+    function buildExampleBlock(rowsData, resolvedIndex) {
+        const exampleCount = getEffectiveExampleRowCount(rowsData);
+        const selectedColumns = Array.isArray(appState.exampleSettings?.columns)
+            ? appState.exampleSettings.columns.filter(Boolean)
+            : [];
+        if (exampleCount === 0 || selectedColumns.length === 0) return '';
+        if (typeof resolvedIndex === 'number' && resolvedIndex >= 0 && resolvedIndex < exampleCount) return '';
+
+        const dataSource = Array.isArray(rowsData) ? rowsData : [];
+        const exampleRows = dataSource.slice(0, exampleCount);
+        if (exampleRows.length === 0) return '';
+
+        const lines = [
+            '### OUTPUT EXAMPLES ###',
+            'These rows demonstrate the desired output format. Use them as guidance and do not modify or repeat them.'
+        ];
+
+        exampleRows.forEach((exampleRow, idx) => {
+            lines.push(`Example ${idx + 1}:`);
+            selectedColumns.forEach(col => {
+                lines.push(`- ${col}: ${getCellValue(exampleRow, col)}`);
+            });
+            if (idx !== exampleRows.length - 1) lines.push('');
+        });
+
+        lines.push('### END OUTPUT EXAMPLES ###', '');
+        return lines.join('\n');
+    }
+
     function buildPrompt(task, row, rowIndex = null, dataSet = appState.data) {
         let prompt = task.prompt;
+
+        const rowsData = Array.isArray(dataSet) ? dataSet : [];
+        const resolvedIndex = (typeof rowIndex === 'number' && rowIndex >= 0)
+            ? rowIndex
+            : (row ? rowsData.indexOf(row) : -1);
 
         if (task.type === 'analyze') {
             prompt = prompt.replace(/\{\{COLUMN\}\}/g, getCellValue(row, task.sourceColumn));
@@ -684,10 +733,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedContext = Array.isArray(task.contextColumns) ? task.contextColumns.filter(Boolean) : [];
         let contextBlock = '';
         if (selectedContext.length) {
-            const rowsData = Array.isArray(dataSet) ? dataSet : [];
-            const resolvedIndex = (typeof rowIndex === 'number' && rowIndex >= 0)
-                ? rowIndex
-                : (row ? rowsData.indexOf(row) : -1);
             const contextLines = ['### SELECTED CONTEXT COLUMNS ###'];
 
             selectedContext.forEach(col => {
@@ -709,8 +754,9 @@ document.addEventListener('DOMContentLoaded', () => {
             contextBlock = contextLines.join('\n');
         }
 
+        const exampleBlock = buildExampleBlock(rowsData, resolvedIndex);
         const rowContextBlock = appState.includeRowContext ? buildRowContext(row) + '\n\n' : '';
-        return `${rowContextBlock}${contextBlock}${prompt}`;
+        return `${exampleBlock}${rowContextBlock}${contextBlock}${prompt}`;
     }
 
     const updateCostEstimate = () => {
@@ -719,27 +765,39 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.tokenEstimate.textContent = "~0 tokens";
             return;
         }
-        
+
         const provider = ui.providerSelector.value;
-        if (provider === 'ollama' || provider === 'lmstudio') {
+        const rowsAvailable = Math.max(appState.data.length - getEffectiveExampleRowCount(), 0);
+
+        if (rowsAvailable === 0) {
             ui.costEstimate.textContent = "$0.00";
-            ui.tokenEstimate.textContent = provider === 'lmstudio' ? "LM Studio handles requests locally" : "Processing is local";
+            ui.tokenEstimate.textContent = "0 rows to process";
+            return;
+        }
+
+        if (provider === 'ollama' || provider === 'lmstudio') {
+            const label = rowsAvailable === 1 ? '1 row' : `${rowsAvailable} rows`;
+            ui.costEstimate.textContent = "$0.00";
+            ui.tokenEstimate.textContent = provider === 'lmstudio'
+                ? `LM Studio handles ${label} locally`
+                : `Processing ${label} locally`;
             return;
         }
 
         let totalInputTokens = 0;
         let totalOutputTokens = 0;
-        const firstRow = appState.data[0];
+        const sampleIndex = Math.min(getEffectiveExampleRowCount(), appState.data.length - 1);
+        const sampleRow = appState.data[sampleIndex];
         const systemPromptTokens = estimateTokens(ui.systemPromptInput.value + ui.projectDescriptionInput.value + ui.additionalContextInput.value);
-        
+
         appState.analysisTasks.forEach(task => {
-            if (task.prompt && firstRow) {
-                const userPrompt = buildPrompt(task, firstRow, 0, appState.data);
-                totalInputTokens += (estimateTokens(userPrompt) + systemPromptTokens) * appState.data.length;
-                totalOutputTokens += (parseInt(task.maxTokens, 10) || 150) * appState.data.length;
+            if (task.prompt && sampleRow) {
+                const userPrompt = buildPrompt(task, sampleRow, sampleIndex, appState.data);
+                totalInputTokens += (estimateTokens(userPrompt) + systemPromptTokens) * rowsAvailable;
+                totalOutputTokens += (parseInt(task.maxTokens, 10) || 150) * rowsAvailable;
             }
         });
-        
+
         const completions = appState.aiParams.n || 1;
         const totalTokens = totalInputTokens + (totalOutputTokens * completions);
         const modelName = getModelIdentifier();
@@ -859,17 +917,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function runValidationChecks() {
         const results = [];
-        const total = appState.data.length;
+        const skip = getEffectiveExampleRowCount();
+        const relevantData = appState.data.slice(skip);
+        const total = relevantData.length;
 
         for (const task of appState.analysisTasks) {
-            if (task.reliabilityCheck && task.reliabilityColumn) {
-                const aiValsRaw = appState.data.map(r => r[task.outputColumn]);
-                const humanValsRaw = appState.data.map(r => r[task.reliabilityColumn]);
+            if (task.reliabilityCheck && task.reliabilityColumn && total > 0) {
+                const aiValsRaw = relevantData.map(r => r[task.outputColumn]);
+                const humanValsRaw = relevantData.map(r => r[task.reliabilityColumn]);
                 const aiSets = aiValsRaw.map(v => parseCodeSet(v));
                 const humanSets = humanValsRaw.map(v => parseCodeSet(v));
                 const aiVals = aiSets.map(s => s.slice().sort().join('|'));
                 const humanVals = humanSets.map(s => s.slice().sort().join('|'));
-                const exact = aiVals.filter((v,i) => v === humanVals[i]).length / total;
+                const exact = total === 0 ? 0 : aiVals.filter((v,i) => v === humanVals[i]).length / total;
                 const kappa = computeKappa(aiVals, humanVals);
                 const { alpha, Do, De } = computeKrippendorffAlpha(aiSets, humanSets, task.reliabilityMethod);
                 const entry = { validation: 'Intercoder Reliability', task: task.outputColumn, method: "Cohen's Kappa", score: Number(kappa.toFixed(2)), krippendorff_alpha: Number(alpha.toFixed(2)), exact_match: Number(exact.toFixed(2)), reference_column: task.reliabilityColumn, distance: task.reliabilityMethod || 'jaccard', observed_disagreement: Number(Do.toFixed(2)), expected_disagreement: Number(De.toFixed(2)) };
@@ -878,10 +938,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (appState.validationSettings.consistencyCheck && appState.validationSettings.consistencyColumns.length >= 2) {
+        if (appState.validationSettings.consistencyCheck && appState.validationSettings.consistencyColumns.length >= 2 && total > 0) {
             const cols = appState.validationSettings.consistencyColumns;
-            const c1 = appState.data.map(r => r[cols[0]]);
-            const c2 = appState.data.map(r => r[cols[1]]);
+            const c1 = relevantData.map(r => r[cols[0]]);
+            const c2 = relevantData.map(r => r[cols[1]]);
             const nums1 = c1.map(Number);
             const nums2 = c2.map(Number);
             let method, corr;
@@ -899,9 +959,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (appState.validationSettings.missingCheck) {
             for (const task of appState.analysisTasks) {
-                const vals = appState.data.map(r => r[task.outputColumn]);
+                const vals = relevantData.map(r => r[task.outputColumn]);
                 const empty = vals.filter(v => v === '' || v === null || v === undefined || v === 'ERROR').length;
-                const entry = { validation: 'Missing Output Check', column: task.outputColumn, empty_rows: empty, total_rows: total, percentage: Number((empty * 100 / total).toFixed(2)) };
+                const percentage = total === 0 ? 0 : Number((empty * 100 / total).toFixed(2));
+                const entry = { validation: 'Missing Output Check', column: task.outputColumn, empty_rows: empty, total_rows: total, percentage };
                 results.push(entry);
                 log(JSON.stringify(entry), 'VALIDATION');
             }
@@ -909,13 +970,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (appState.validationSettings.faceValidity) {
             const task = appState.analysisTasks.find(t => t.reliabilityCheck && t.reliabilityColumn);
-            if (task) {
+            if (task && total > 0) {
                 const sampleSize = Math.min(10, total);
                 const rows = [];
                 for (let i = 0; i < sampleSize; i++) {
                     const idx = Math.floor(Math.random() * total);
-                    const row = appState.data[idx];
-                    rows.push({row_id: idx + 1, human_label: row[task.reliabilityColumn], ai_label: row[task.outputColumn]});
+                    const globalIdx = skip + idx;
+                    const row = relevantData[idx];
+                    rows.push({row_id: globalIdx + 1, human_label: row[task.reliabilityColumn], ai_label: row[task.outputColumn]});
                 }
                 const csv = 'row_id,human_label,ai_label\n' + rows.map(r => `${r.row_id},"${r.human_label}","${r.ai_label}"`).join('\n');
                 downloadFile(csv, 'face_validity_sample.csv', 'text/csv;charset=utf-8;');
@@ -925,24 +987,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (appState.validationSettings.promptStability) {
+        if (appState.validationSettings.promptStability && total > 0) {
             const sampleSize = Math.min(5, total);
             const indices = Array.from({length: sampleSize}, () => Math.floor(Math.random()*total));
             let diffTotal = 0;
+            let comparisons = 0;
             for (const idx of indices) {
-                const row = appState.data[idx];
+                const globalIdx = skip + idx;
+                const row = appState.data[globalIdx];
                 for (const task of appState.analysisTasks) {
                     const original = row[task.outputColumn] || '';
-                    const prompt = 'Please ' + buildPrompt(task, row, idx, appState.data);
+                    const prompt = 'Please ' + buildPrompt(task, row, globalIdx, appState.data);
                     try {
                         const result = await processWithApi(prompt, task.maxTokens);
                         diffTotal += Math.abs(estimateTokens(result.text) - estimateTokens(original));
+                        comparisons++;
                     } catch (e) {
-                        log(`Stability check error row ${idx+1}: ${e.message}`, 'ERROR');
+                        log(`Prompt stability check failed for row ${globalIdx + 1}, task ${task.outputColumn}: ${e.message}`, 'VALIDATION');
                     }
                 }
             }
-            const entry = { validation: 'Prompt Stability', rows_tested: sampleSize, avg_output_diff_tokens: Number((diffTotal / (sampleSize * appState.analysisTasks.length)).toFixed(2)), variation_method: 'syntactic filler' };
+            const avgDiff = comparisons === 0 ? 0 : diffTotal / comparisons;
+            const entry = { validation: 'Prompt Stability', rows_tested: sampleSize, avg_output_diff_tokens: Number(avgDiff.toFixed(2)), variation_method: 'syntactic filler' };
             results.push(entry);
             log(JSON.stringify(entry), 'VALIDATION');
         }
@@ -1291,6 +1357,92 @@ document.addEventListener('DOMContentLoaded', () => {
         return Array.from(new Set([...(appState.headers || []), ...appState.analysisTasks.map(t => t.outputColumn).filter(Boolean)]));
     }
 
+    function updateExampleSettingsSummary() {
+        if (!ui.exampleRowsSummary) return;
+        const totalRows = appState.data.length || 0;
+        const exampleCount = getEffectiveExampleRowCount();
+        const columns = Array.isArray(appState.exampleSettings.columns)
+            ? appState.exampleSettings.columns.filter(Boolean)
+            : [];
+
+        if (totalRows === 0) {
+            ui.exampleRowsSummary.textContent = 'Upload a spreadsheet to enable output examples.';
+            return;
+        }
+
+        if (exampleCount === 0) {
+            ui.exampleRowsSummary.textContent = 'No output examples selected. Processing will start from row 1.';
+            return;
+        }
+
+        if (columns.length === 0) {
+            ui.exampleRowsSummary.textContent = `Top ${exampleCount} row${exampleCount === 1 ? '' : 's'} marked as examples, but no columns selected yet.`;
+            return;
+        }
+
+        const columnList = columns.join(', ');
+        ui.exampleRowsSummary.textContent = `Skipping top ${exampleCount} row${exampleCount === 1 ? '' : 's'} as examples using columns: ${columnList}. New outputs begin on row ${exampleCount + 1}.`;
+    }
+
+    function updateExampleColumnsOptions() {
+        if (!ui.exampleColumnsSelect) return;
+        const availableColumns = getAllKnownColumns();
+        const selected = Array.isArray(appState.exampleSettings.columns)
+            ? appState.exampleSettings.columns.filter(col => availableColumns.includes(col))
+            : [];
+
+        appState.exampleSettings.columns = selected;
+        ui.exampleColumnsSelect.innerHTML = '';
+
+        if (availableColumns.length === 0) {
+            const option = new Option('Upload a file first', '');
+            option.disabled = true;
+            option.selected = true;
+            ui.exampleColumnsSelect.add(option);
+            ui.exampleColumnsSelect.disabled = true;
+        } else {
+            availableColumns.forEach(header => {
+                const option = new Option(header, header, false, selected.includes(header));
+                ui.exampleColumnsSelect.add(option);
+            });
+            ui.exampleColumnsSelect.disabled = false;
+        }
+
+        updateExampleSettingsSummary();
+    }
+
+    function applyExampleRowCount(value) {
+        const maxRows = appState.data.length || 0;
+        const parsed = parseInt(value, 10);
+        const normalized = isNaN(parsed) ? 0 : Math.max(0, Math.min(parsed, maxRows));
+        appState.exampleSettings.rowCount = normalized;
+        if (ui.exampleRowCountInput) {
+            if (ui.exampleRowCountInput.value !== String(normalized)) {
+                ui.exampleRowCountInput.value = normalized;
+            }
+            ui.exampleRowCountInput.max = maxRows;
+        }
+        updateExampleSettingsSummary();
+        updateCostEstimate();
+        renderDataPreview();
+        if (appState.testMode?.isActive) {
+            renderTestModeView();
+        }
+    }
+
+    function handleExampleColumnsChange() {
+        if (!ui.exampleColumnsSelect) return;
+        const selected = Array.from(new Set(Array.from(ui.exampleColumnsSelect.selectedOptions || [])
+            .map(opt => opt.value)
+            .filter(Boolean)));
+        appState.exampleSettings.columns = selected;
+        updateExampleSettingsSummary();
+        updateCostEstimate();
+        if (appState.testMode?.isActive) {
+            renderTestModeView();
+        }
+    }
+
     function updateTaskColumnDropdowns() {
         const availableColumns = getAllKnownColumns();
         document.querySelectorAll('.task-input[data-type="sourceColumn"]').forEach(dropdown => {
@@ -1517,6 +1669,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (availableColumns.includes(currentVal)) sel.value = currentVal;
             }
         });
+
+        updateExampleColumnsOptions();
     }
 
     function confirmPresetTask() {
@@ -1629,16 +1783,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     function startTestMode(task) {
+        const skip = getEffectiveExampleRowCount();
+        if (skip >= appState.data.length) {
+            log('All rows are designated as output examples. Add more data to run Test Mode.', 'ERROR');
+            return;
+        }
         ui.selectTaskModal.classList.add('hidden');
-        appState.testMode = { isActive: true, task, currentIndex: 0 };
+        appState.testMode = { isActive: true, task, currentIndex: skip };
         ui.testModeTitle.textContent = `Test Task -> ${task.outputColumn}`;
         renderTestModeView();
         ui.testModeModal.classList.remove('hidden');
     }
 
     function renderTestModeView() {
-        const { task, currentIndex } = appState.testMode;
-        if (!task || !appState.data[currentIndex]) return;
+        const { task } = appState.testMode;
+        const skip = getEffectiveExampleRowCount();
+        let { currentIndex } = appState.testMode;
+        if (!task) return;
+        if (currentIndex < skip) {
+            currentIndex = skip;
+            appState.testMode.currentIndex = currentIndex;
+        }
+        if (!appState.data[currentIndex]) return;
+
         const row = appState.data[currentIndex];
         const prompt = buildPrompt(task, row, currentIndex, appState.data);
         
@@ -1651,18 +1818,23 @@ document.addEventListener('DOMContentLoaded', () => {
             rowDataText = 'N/A (Custom Task references columns in prompt)';
         }
 
-        ui.testModeNavInfo.textContent = `Row ${currentIndex + 1} of ${appState.data.length}`;
+        const effectiveTotal = Math.max(appState.data.length - skip, 0);
+        const position = effectiveTotal > 0 ? (currentIndex - skip + 1) : 0;
+        ui.testModeNavInfo.textContent = effectiveTotal > 0
+            ? `Processing row ${position} of ${effectiveTotal} (actual row ${currentIndex + 1})`
+            : 'No rows available for testing';
         ui.testModeRowData.textContent = rowDataText;
         ui.testModePrompt.textContent = prompt;
         ui.testModeOutput.textContent = 'Click "Rerun" to generate output.';
 
-        ui.testModePrevBtn.disabled = currentIndex === 0;
+        ui.testModePrevBtn.disabled = currentIndex <= skip;
         ui.testModeNextBtn.disabled = currentIndex >= appState.data.length - 1;
     }
 
     async function runTestModeRow() {
         const { task, currentIndex } = appState.testMode;
-        if (!task || !appState.data[currentIndex]) return;
+        const skip = getEffectiveExampleRowCount();
+        if (!task || !appState.data[currentIndex] || currentIndex < skip) return;
 
         const row = appState.data[currentIndex];
         const prompt = buildPrompt(task, row, currentIndex, appState.data);
@@ -1686,6 +1858,10 @@ document.addEventListener('DOMContentLoaded', () => {
             additionalContext: ui.additionalContextInput.value,
             analysisTasks: appState.analysisTasks,
             includeRowContext: appState.includeRowContext,
+            exampleSettings: {
+                rowCount: appState.exampleSettings.rowCount,
+                columns: Array.isArray(appState.exampleSettings.columns) ? [...appState.exampleSettings.columns] : []
+            },
             validationSettings: appState.validationSettings,
             aiParams: appState.aiParams,
         };
@@ -1768,6 +1944,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 appState.includeRowContext = profile.includeRowContext !== false;
                 ui.includeRowContextToggle.checked = appState.includeRowContext;
+                if (profile.exampleSettings) {
+                    const rowCount = Math.max(0, parseInt(profile.exampleSettings.rowCount, 10) || 0);
+                    appState.exampleSettings = {
+                        rowCount,
+                        columns: Array.isArray(profile.exampleSettings.columns)
+                            ? profile.exampleSettings.columns.filter(Boolean)
+                            : []
+                    };
+                    if (ui.exampleRowCountInput) {
+                        ui.exampleRowCountInput.value = rowCount;
+                        ui.exampleRowCountInput.max = appState.data.length || 0;
+                    }
+                } else {
+                    appState.exampleSettings = { rowCount: 0, columns: [] };
+                    if (ui.exampleRowCountInput) {
+                        ui.exampleRowCountInput.value = 0;
+                        ui.exampleRowCountInput.max = appState.data.length || 0;
+                    }
+                }
+                updateExampleColumnsOptions();
+                updateExampleSettingsSummary();
                 if (profile.validationSettings) {
                     appState.validationSettings = Object.assign(appState.validationSettings, profile.validationSettings);
                     ui.checkMissingOutputs.checked = appState.validationSettings.missingCheck;
@@ -1829,9 +2026,20 @@ document.addEventListener('DOMContentLoaded', () => {
             complete: (results) => {
                 appState.data = results.data;
                 appState.headers = results.meta.fields;
+                const clampedExamples = Math.min(appState.exampleSettings.rowCount || 0, appState.data.length);
+                appState.exampleSettings.rowCount = clampedExamples;
+                appState.exampleSettings.columns = Array.isArray(appState.exampleSettings.columns)
+                    ? appState.exampleSettings.columns.filter(col => appState.headers.includes(col))
+                    : [];
+                if (ui.exampleRowCountInput) {
+                    ui.exampleRowCountInput.max = appState.data.length || 0;
+                    ui.exampleRowCountInput.value = clampedExamples;
+                }
+                updateExampleColumnsOptions();
                 renderDataPreview();
                 renderAnalysisDashboard();
                 updateTaskColumnDropdowns();
+                updateExampleSettingsSummary();
                 updateCostEstimate();
                 log(`Parsed ${appState.data.length} rows with columns: ${appState.headers.join(', ')}`, 'FILE');
             },
@@ -1893,6 +2101,16 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.aiParams.presPenalty = parseFloat(e.target.value);
         ui.presPenaltyValue.textContent = e.target.value;
     });
+
+    if (ui.exampleRowCountInput) {
+        const handler = (e) => applyExampleRowCount(e.target.value);
+        ui.exampleRowCountInput.addEventListener('input', handler);
+        ui.exampleRowCountInput.addEventListener('change', handler);
+    }
+
+    if (ui.exampleColumnsSelect) {
+        ui.exampleColumnsSelect.addEventListener('change', handleExampleColumnsChange);
+    }
 
     ui.gpt5ReasoningSelect.addEventListener('change', e => { appState.aiParams.reasoning = e.target.value; });
     ui.gpt5VerbositySelect.addEventListener('change', e => { appState.aiParams.verbosity = e.target.value; });
@@ -2155,12 +2373,25 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.headers = Array.from(headerSet);
         renderDataPreview();
         let totalItems = 0;
-        const totalItemsToProcess = appState.data.length * appState.analysisTasks.length;
+        const skipCount = getEffectiveExampleRowCount(processedData);
+        const rowsToProcess = Math.max(processedData.length - skipCount, 0);
+        const totalItemsToProcess = rowsToProcess * appState.analysisTasks.length;
+
+        if (skipCount > 0) {
+            log(`Using top ${skipCount} row${skipCount === 1 ? '' : 's'} as output examples. Processing begins on row ${skipCount + 1}.`, 'RUN');
+        }
 
         for (const task of appState.analysisTasks) {
-            appState.runLog.entries.push({ task: task.outputColumn, row_context_included: appState.includeRowContext, context_columns: Array.isArray(task.contextColumns) ? [...task.contextColumns] : [], timestamp: new Date().toISOString() });
+            appState.runLog.entries.push({
+                task: task.outputColumn,
+                row_context_included: appState.includeRowContext,
+                context_columns: Array.isArray(task.contextColumns) ? [...task.contextColumns] : [],
+                example_rows: skipCount,
+                example_columns: Array.isArray(appState.exampleSettings.columns) ? [...appState.exampleSettings.columns] : [],
+                timestamp: new Date().toISOString()
+            });
 
-            for (let i = 0; i < processedData.length; i++) {
+            for (let i = skipCount; i < processedData.length; i++) {
                 const row = processedData[i];
                 const prompt = buildPrompt(task, row, i, processedData);
                 try {
@@ -2179,8 +2410,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderDataPreview();
                 }
                 totalItems++;
-                ui.progressBar.style.width = `${(totalItems / totalItemsToProcess) * 100}%`;
+                if (totalItemsToProcess > 0) {
+                    ui.progressBar.style.width = `${(totalItems / totalItemsToProcess) * 100}%`;
+                }
             }
+        }
+
+        if (totalItemsToProcess === 0) {
+            ui.progressBar.style.width = '100%';
+            log('No rows to process after skipping output examples.', 'RUN');
         }
 
         appState.data = processedData;
@@ -2226,7 +2464,13 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.closeTestModeBtn.addEventListener('click', () => ui.testModeModal.classList.add('hidden'));
     ui.testModeRerunBtn.addEventListener('click', runTestModeRow);
     ui.testModeNextBtn.addEventListener('click', () => { if (appState.testMode.currentIndex < appState.data.length - 1) { appState.testMode.currentIndex++; renderTestModeView(); } });
-    ui.testModePrevBtn.addEventListener('click', () => { if (appState.testMode.currentIndex > 0) { appState.testMode.currentIndex--; renderTestModeView(); } });
+    ui.testModePrevBtn.addEventListener('click', () => {
+        const skip = getEffectiveExampleRowCount();
+        if (appState.testMode.currentIndex > skip) {
+            appState.testMode.currentIndex--;
+            renderTestModeView();
+        }
+    });
     ui.guessProjectBtn.addEventListener('click', guessProjectOverview);
     ui.guessAdditionalBtn.addEventListener('click', guessAdditionalContext);
     ui.taskContainer.addEventListener('click', (e) => {
@@ -2258,4 +2502,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.presPenaltyValue.textContent = ui.presPenaltySlider.value;
     ui.downloadLogBtn.style.display = 'inline-block';
     ui.downloadLogBtn.disabled = appState.runLog.entries.length === 0;
+    updateExampleColumnsOptions();
+    updateExampleSettingsSummary();
 });
