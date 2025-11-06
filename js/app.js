@@ -322,7 +322,8 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.headers.forEach(header => {
                 const td = document.createElement('td');
                 td.className = 'px-4 py-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-xs';
-                td.textContent = row[header];
+                const value = row && Object.prototype.hasOwnProperty.call(row, header) ? row[header] : undefined;
+                td.textContent = value == null ? '' : value;
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
@@ -330,6 +331,23 @@ document.addEventListener('DOMContentLoaded', () => {
         table.appendChild(tbody);
         ui.dataPreview.innerHTML = '';
         ui.dataPreview.appendChild(table);
+    };
+
+    const updatePreviewCell = (rowIndex, columnKey, value) => {
+        if (rowIndex >= 100) return false;
+        const table = ui.dataPreview.querySelector('table');
+        if (!table) return false;
+        const headerCells = Array.from(table.querySelectorAll('thead th'));
+        const columnIndex = headerCells.findIndex(th => th.textContent === columnKey);
+        if (columnIndex === -1) return false;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return false;
+        const row = tbody.rows[rowIndex];
+        if (!row) return false;
+        const cell = row.cells[columnIndex];
+        if (!cell) return false;
+        cell.textContent = value == null ? '' : value;
+        return true;
     };
 
     const detectColumnInfo = (values) => {
@@ -2080,6 +2098,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         appState.headers = Array.from(headerSet);
+        renderDataPreview();
         let totalItems = 0;
         const totalItemsToProcess = appState.data.length * appState.analysisTasks.length;
 
@@ -2092,17 +2111,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const result = await processWithApi(prompt, task.maxTokens);
                     row[task.outputColumn] = result.text.trim();
-                    if (!headerSet.has(task.outputColumn)) {
-                        headerSet.add(task.outputColumn);
-                        appState.headers = Array.from(headerSet);
-                    }
                 } catch (error) {
                     log(`ERROR on row ${i + 1}, task '${task.outputColumn}': ${error.message}`, 'ERROR');
                     row[task.outputColumn] = 'ERROR';
-                    if (!headerSet.has(task.outputColumn)) {
-                        headerSet.add(task.outputColumn);
-                        appState.headers = Array.from(headerSet);
-                    }
+                }
+
+                if (!appState.data[i]) {
+                    appState.data[i] = {};
+                }
+                appState.data[i][task.outputColumn] = row[task.outputColumn];
+                if (i < 100 && !updatePreviewCell(i, task.outputColumn, row[task.outputColumn])) {
+                    renderDataPreview();
                 }
                 totalItems++;
                 ui.progressBar.style.width = `${(totalItems / totalItemsToProcess) * 100}%`;
