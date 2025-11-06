@@ -621,11 +621,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
+    function getColumnsForRow(row) {
+        const rowKeys = row ? Object.keys(row) : [];
+        return Array.from(new Set([...(appState.headers || []), ...rowKeys]));
+    }
+
     function buildRowContext(row) {
-        const rowLines = appState.headers.map(h => `${h}: ${row[h] || ''}`);
+        const columns = getColumnsForRow(row);
+        const rowLines = columns.map(h => `${h}: ${row[h] || ''}`);
         let context = '### ROW CONTEXT - DO NOT INCLUDE IN OUTPUT ###\n' + rowLines.join('\n');
         if (appState.data.length > 1 && appState.data[0] !== row) {
-            const refLines = appState.headers.map(h => `${h}: ${appState.data[0][h] || ''}`);
+            const referenceRow = appState.data[0];
+            const referenceColumns = Array.from(new Set([...columns, ...Object.keys(referenceRow || {})]));
+            const refLines = referenceColumns.map(h => `${h}: ${referenceRow[h] || ''}`);
             context += `\n\nReference Row:\n${refLines.join('\n')}`;
         }
         context += '\n### END CONTEXT ###';
@@ -642,7 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt = prompt.replace(/\{\{COLUMNS_DATA\}\}/g, columnsData);
         }
 
-        appState.headers.forEach(header => {
+        const columns = getColumnsForRow(row);
+        columns.forEach(header => {
             const escapedHeader = header.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
             const regex = new RegExp(`\\{\\{${escapedHeader}\\}\\}`, 'g');
             prompt = prompt.replace(regex, row[header] || '');
@@ -1218,21 +1227,26 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCostEstimate();
     }
 
+    function getAllKnownColumns() {
+        return Array.from(new Set([...(appState.headers || []), ...appState.analysisTasks.map(t => t.outputColumn).filter(Boolean)]));
+    }
+
     function updateTaskColumnDropdowns() {
+        const availableColumns = getAllKnownColumns();
         document.querySelectorAll('.task-input[data-type="sourceColumn"]').forEach(dropdown => {
             const saved = dropdown.dataset.savedValue || '';
             const currentVal = saved || dropdown.value;
             dropdown.innerHTML = '';
-            if (appState.headers.length === 0) {
+            if (availableColumns.length === 0) {
                 dropdown.add(new Option('Upload a file first', ''));
                 dropdown.disabled = true;
                 dropdown.value = '';
                 dropdown.dataset.savedValue = saved;
             } else {
                 dropdown.add(new Option('Select a column...', ''));
-                appState.headers.forEach(header => dropdown.add(new Option(header, header)));
+                availableColumns.forEach(header => dropdown.add(new Option(header, header)));
                 dropdown.disabled = false;
-                if (appState.headers.includes(currentVal)) {
+                if (availableColumns.includes(currentVal)) {
                     dropdown.value = currentVal;
                     dropdown.dataset.savedValue = currentVal;
                 } else {
@@ -1246,16 +1260,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const saved = dropdown.dataset.savedValue || '';
             const currentVal = saved || dropdown.value;
             dropdown.innerHTML = '';
-            if (appState.headers.length === 0) {
+            if (availableColumns.length === 0) {
                 dropdown.add(new Option('Upload a file first', ''));
                 dropdown.disabled = true;
                 dropdown.value = '';
                 dropdown.dataset.savedValue = saved;
             } else {
                 dropdown.add(new Option('Select a column...', ''));
-                appState.headers.forEach(h => dropdown.add(new Option(h, h)));
+                availableColumns.forEach(h => dropdown.add(new Option(h, h)));
                 dropdown.disabled = !dropdown.closest('.task-card').querySelector('input[data-type="reliabilityCheck"]').checked;
-                if (appState.headers.includes(currentVal)) {
+                if (availableColumns.includes(currentVal)) {
                     dropdown.value = currentVal;
                     dropdown.dataset.savedValue = currentVal;
                 } else {
@@ -1278,8 +1292,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ui.consistencyColumns) {
             const current = Array.from(ui.consistencyColumns.selectedOptions).map(o => o.value);
             ui.consistencyColumns.innerHTML = '';
-            appState.headers.forEach(h => ui.consistencyColumns.add(new Option(h, h)));
-            current.forEach(val => { if (appState.headers.includes(val)) ui.consistencyColumns.querySelector(`option[value="${val}"]`).selected = true; });
+            availableColumns.forEach(h => ui.consistencyColumns.add(new Option(h, h)));
+            current.forEach(val => { if (availableColumns.includes(val)) ui.consistencyColumns.querySelector(`option[value="${val}"]`).selected = true; });
         }
 
         updatePresetDropdowns();
@@ -1387,17 +1401,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updatePresetDropdowns() {
+        const availableColumns = getAllKnownColumns();
         ui.presetModalBody.querySelectorAll('select').forEach(sel => {
             const currentVal = sel.value;
             sel.innerHTML = '';
-            if (appState.headers.length === 0) {
+            if (availableColumns.length === 0) {
                 sel.add(new Option('Upload a file first', ''));
                 sel.disabled = true;
             } else {
                 sel.add(new Option('Select column...', ''));
-                appState.headers.forEach(h => sel.add(new Option(h, h)));
+                availableColumns.forEach(h => sel.add(new Option(h, h)));
                 sel.disabled = false;
-                if (appState.headers.includes(currentVal)) sel.value = currentVal;
+                if (availableColumns.includes(currentVal)) sel.value = currentVal;
             }
         });
     }
@@ -2005,31 +2020,44 @@ document.addEventListener('DOMContentLoaded', () => {
         log(`Starting pipeline with ${appState.analysisTasks.length} tasks...`, 'RUN');
         
         let processedData = JSON.parse(JSON.stringify(appState.data));
-        const newHeaders = [...appState.headers];
+        const headerSet = new Set([...(appState.headers || [])]);
+        appState.analysisTasks.forEach(task => {
+            if (task.outputColumn) {
+                headerSet.add(task.outputColumn);
+            }
+        });
+        appState.headers = Array.from(headerSet);
         let totalItems = 0;
         const totalItemsToProcess = appState.data.length * appState.analysisTasks.length;
 
         for (const task of appState.analysisTasks) {
-            if (!newHeaders.includes(task.outputColumn)) newHeaders.push(task.outputColumn);
             appState.runLog.entries.push({ task: task.outputColumn, row_context_included: appState.includeRowContext, timestamp: new Date().toISOString() });
-            
+
             for (let i = 0; i < processedData.length; i++) {
                 const row = processedData[i];
                 const prompt = buildPrompt(task, row);
                 try {
                     const result = await processWithApi(prompt, task.maxTokens);
                     row[task.outputColumn] = result.text.trim();
+                    if (!headerSet.has(task.outputColumn)) {
+                        headerSet.add(task.outputColumn);
+                        appState.headers = Array.from(headerSet);
+                    }
                 } catch (error) {
                     log(`ERROR on row ${i + 1}, task '${task.outputColumn}': ${error.message}`, 'ERROR');
                     row[task.outputColumn] = 'ERROR';
+                    if (!headerSet.has(task.outputColumn)) {
+                        headerSet.add(task.outputColumn);
+                        appState.headers = Array.from(headerSet);
+                    }
                 }
                 totalItems++;
                 ui.progressBar.style.width = `${(totalItems / totalItemsToProcess) * 100}%`;
             }
         }
-        
+
         appState.data = processedData;
-        appState.headers = newHeaders;
+        appState.headers = Array.from(headerSet);
         await runValidationChecks();
         renderDataPreview();
         renderAnalysisDashboard();
