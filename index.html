@@ -66,6 +66,7 @@
                         <label for="provider-selector" class="block text-sm font-medium text-gray-400">Provider</label>
                         <select id="provider-selector" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
                             <option value="openai" selected>OpenAI</option>
+                            <option value="lmstudio">LM Studio (Local)</option>
                             <option value="gemini">Google Gemini</option>
                             <option value="ollama">Ollama (Local)</option>
                         </select>
@@ -95,6 +96,21 @@
                              </select>
                              <button id="openai-params-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-md">AI Params</button>
                          </div>
+                     </div>
+                     <div id="lmstudio-config" class="config-group hidden-config space-y-2">
+                         <label for="lmstudio-url-input" class="block text-sm font-medium text-gray-400">Server URL</label>
+                         <div class="flex gap-2">
+                             <input type="text" id="lmstudio-url-input" value="http://localhost:1234" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                             <button id="fetch-lmstudio-models-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 rounded-md">Fetch</button>
+                         </div>
+                         <label for="lmstudio-model-selector" class="block text-sm font-medium text-gray-400">Model</label>
+                         <div class="flex gap-2 items-center">
+                             <select id="lmstudio-model-selector" class="flex-grow bg-gray-700 border border-gray-600 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" disabled>
+                                <option>Fetch models from server</option>
+                             </select>
+                             <button id="lmstudio-params-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-md">AI Params</button>
+                         </div>
+                         <p class="text-xs text-gray-500">LM Studio exposes an OpenAI-compatible API.</p>
                      </div>
                      <div id="ollama-config" class="config-group hidden-config space-y-2">
                          <label for="ollama-url-input" class="block text-sm font-medium text-gray-400">Server URL</label>
